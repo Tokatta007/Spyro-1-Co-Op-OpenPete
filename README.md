@@ -8,21 +8,20 @@ establishes whether the engine can feed a second controller, which is the one
 thing that gates everything else. See [docs/PORTING.md](docs/PORTING.md) for
 the plan and the honest state of each blocker.
 
-## Why this repository exists
+## Different from the PS1 mod
 
-There is already a finished version of this mod for the original PlayStation:
-**[Spyro-1-Co-Op-Mod](https://github.com/Tokatta007/Spyro-1-Co-Op-Mod)**. It
-works, it ships as an `.xdelta` patch, and it does two-player split-screen on
-real hardware. It is also at the end of what the console can give. The code
-lives in about 11 KB of BIOS scratch RAM because the game's address space is
-full end to end, and drawing the scene twice already costs half the framerate
-at a 300% overclock.
+The original is
+**[Spyro-1-Co-Op-Mod](https://github.com/Tokatta007/Spyro-1-Co-Op-Mod)**, which
+ships as an `.xdelta` patch and does two-player split-screen on real hardware.
+It stays up, and it stays the reference implementation.
 
-OpenPete removes both walls. Native geometry and a host GPU make more than two
+It is also at the limit of the console. Its code lives in about 11 KB of BIOS
+scratch RAM because the game's address space is full end to end, and drawing
+the scene twice costs half the framerate at a 300% overclock.
+
+Neither limit applies here. Native geometry and a host GPU make more than two
 viewports a question of API rather than budget, and the SDK's `guest_alloc`
-makes the memory problem disappear entirely. So the PS1 version is now the
-proof of concept and the reference implementation, and this is where the work
-continues.
+removes the memory problem outright.
 
 The goal is **four-player split-screen**.
 
