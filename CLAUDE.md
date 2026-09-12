@@ -40,8 +40,8 @@ D:\Games\OpenPete\                     the engine, kept at a short path
   library\<hash>\                       ingested disc + compiled module
 
 D:\Documents\!Video Game Stuff\Spyro 1 Modding\
-  Spyro-1-CoOp-OpenPete\               this repo
-  Spyro-1-CoOp-PS1\                    the finished PS1 mod; reference now
+  Spyro-1-Co-Op-OpenPete\              this repo
+  Spyro-1-Co-Op-PS1\                   the finished PS1 mod; reference now
   shared\Roms\                         disc images, shared by both projects
 ```
 
@@ -113,7 +113,7 @@ These are tracked properly in `docs/PORTING.md` §3. In short:
 
 ## Reference
 
-- PS1 version: `../Spyro-1-CoOp-PS1`. `CHANGES.md` is the canonical record of
+- PS1 version: `../Spyro-1-Co-Op-PS1`. `CHANGES.md` is the canonical record of
   every hook, memory allocation and swapped per-player region; `CLAUDE.md` is
   the investigation log. Read both before reimplementing anything.
 - SDK docs: `D:\Games\OpenPete\sdk\docs\index.html`, start at "Getting started"
