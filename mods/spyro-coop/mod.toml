@@ -1,39 +1,47 @@
 # spyro-coop: split-screen co-op for Spyro the Dragon, on OpenPete.
 #
-# STATUS: skeleton. This manifest and its source exist to prove the pipeline
-# end to end: that the mod compiles against the SDK, loads, and gets a
-# per-tick heartbeat, before any co-op logic is ported from the PS1 version.
+# STATUS: phase A of docs/PORT-INVENTORY.md. A second Spyro whose tick and
+# camera update run every frame alongside player 1's, borrowing player 1's
+# input. He is not drawn yet; the readout in the Mods panel, the log, and the
+# swap_view key are how to see him. It also carries the collision guards, the
+# controller 2 probe, and a measurement of when the game polls input.
 #
-# The three engine-contract keys below are the honest ones for where this is
-# heading, not for what it does today. They are set to the values the FINISHED
-# mod needs, so that if the engine refuses the combination we find out now
-# rather than after porting 130 KB of C. See docs/PORTING.md, blocker B2, for
-# why this is the first thing to settle.
-#
-# uses: `api->override_name` - CameraUpdate pre-hook, used as a per-tick heartbeat
-# uses: `api->base` - hands control on so the camera still updates
-# uses: `api->log` - one line on first call, to confirm the mod actually loaded
-# uses: `api->ui_status` - publishes the tick count into the Mods panel
+# uses: `api->override_name` - Spyro's tick, CameraUpdate, two collision routines, PadVSync
+# uses: `api->base` - called twice per frame in the tick and camera overrides, once per player
+# uses: `api->guest_alloc` - one arena for all per-player state, carried by savestates and rewind
+# uses: `api->guest` - swapping state into and out of the game's own globals
+# uses: `api->binding_down` - the swap_view development key
+# uses: `api->config_bool` - the enable switch
+# uses: `api->register_toggle_hook` - stands player 2 down if the mod is disabled mid-level
+# uses: `api->ui_status` / `api->log` - the readout
 
 [mod]
 id      = "spyro-coop"
 name    = "Spyro Co-Op"
-version = "0.0.1"
+version = "0.1.0"
 game    = "spyro-1"
 api     = 1
 
-# state: the finished mod keeps a full second set of player state (position,
-# camera, Sparx, pad) that IS derived from guest history, so a state load must
-# carry it. Today the skeleton keeps only a counter. Revisit when the swap
-# tables land. This is deliberately not "none".
-state = "none"
+# Writes guest RAM every frame: that is the whole technique.
+sim_mutative = true
 
-# runahead: the finished mod has host-side effects (logging, and eventually its
-# own render pass), so the engine may suppress the hook during speculation.
+# Every value derived from game history lives in the guest arena, which the
+# engine carries through a jump like guest RAM. The only host statics are
+# display counters and the config switch, neither of which gameplay reads.
+state = "rebuildable"
+
+# Logs from tick hooks, which the engine may suppress during speculation.
 runahead = "host-fx"
 
-# sim_mutative: the finished mod writes guest RAM constantly, and that is the
-# whole technique, running the game's own tick twice with a second state set
-# swapped in. Declared true from the start so the save modset tag is correct
-# and so we never ship a build that lies about this.
-sim_mutative = true
+[[binding]]
+name    = "swap_view"
+key     = "P"
+purpose = "switch the camera to the other dragon (development aid)"
+
+[[config]]
+key     = "coop.enabled"
+type    = "bool"
+default = true
+label   = "Player 2"
+group   = "Co-op"
+help    = "Run a second Spyro alongside player 1. Off leaves the game stock."

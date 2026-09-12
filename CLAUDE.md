@@ -81,12 +81,13 @@ and is not.
 
 These are tracked properly in `docs/PORTING.md` §3. In short:
 
-1. **Is the second controller's guest pad buffer fed?** `mods/spyro-coop` is a
-   read-only probe that answers this. Nothing else proceeds until it reads
-   "IS fed". Run with two pads, press something on the second.
-2. **Does the engine tolerate running the tick twice per frame?** Determinism
-   is its headline promise. The manifest declares the finished mod's contract
-   rather than the probe's, so a refusal surfaces early.
+1. **Is the second controller's guest pad buffer fed?** Measured 2026-09-12:
+   no, though the engine reads the pad. Reported upstream. The mod still
+   reports it in the Mods panel.
+2. **Does the engine tolerate running the tick twice per frame?** Phase A of
+   `docs/PORT-INVENTORY.md` answers this, with player 2 borrowing player 1's
+   input. Built 2026-09-12, not yet run. Section 6 of that file lists exactly
+   what the first session should read off the panel and log.
 3. **Can a mod drive two scene builds through `api->call`?**
 4. **Per-pass rendering**. Not ours, no date. Four-player depends on it.
 

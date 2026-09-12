@@ -3,10 +3,10 @@
 Split-screen co-op for **Spyro the Dragon**, built as a mod for
 [OpenPete](https://openpete.com/), the native PC port of the game.
 
-**Status: early. This does not play yet.** What is here is a probe mod that
-establishes whether the engine can feed a second controller, which is the one
-thing that gates everything else. See [docs/PORTING.md](docs/PORTING.md) for
-the plan and the honest state of each blocker.
+**Status: early. This does not play yet.** A second Spyro runs alongside the
+first, but he borrows player 1's controls and is not drawn yet. See
+[docs/PORTING.md](docs/PORTING.md) for the blockers and
+[docs/PORT-INVENTORY.md](docs/PORT-INVENTORY.md) for the plan.
 
 ## Different from the PS1 mod
 

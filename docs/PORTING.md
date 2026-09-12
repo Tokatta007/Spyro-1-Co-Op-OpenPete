@@ -240,8 +240,11 @@ pickup text, speedway counter layout) are documented in the PS1 repository's
 2. Settle **B2** properly: does anything complain once the mod starts
    *writing* guest RAM, not merely declaring that it will.
 3. Port the per-player state model and swap tables. No rendering yet: one
-   viewport, two players, prove the second Spyro ticks and responds. This can
-   proceed the moment B1's plumbing lands, and much of it can be written before.
+   viewport, two players, prove the second Spyro ticks and responds.
+   **Inventoried and built 2026-09-12 as phase A** of
+   [PORT-INVENTORY.md](PORT-INVENTORY.md), with player 2 borrowing player 1's
+   input so it does not wait on B1. Compiles clean against the v0.3.0 SDK;
+   not yet run.
 4. Settle **B3**, and if it holds, a first split-screen.
 5. **B4** for four-player.
 
