@@ -35,7 +35,7 @@ rectangle. That is the definition of split-screen and it remains absent.
 
 ## 2. Blockers, in dependency order
 
-### B1 — Is the second controller fed? MEASURED 2026-09-12. Partly.
+### B1: Is the second controller fed? MEASURED 2026-09-12. Partly.
 
 This is the one that gates everything, and the probe answered it precisely. The
 answer is more encouraging than a plain "no".
@@ -64,7 +64,7 @@ mod:spyro-coop: tick 300: p1 conn (0xFFFF), p2 abs (0x0000)
 
 `p1 conn (0xFFFF)` is a healthy buffer: status byte 0, and buttons all-high
 because the pad buffer is active low and nothing was pressed at that instant.
-`p2 abs (0x0000)` is an untouched buffer — status non-zero and the button word
+`p2 abs (0x0000)` is an untouched buffer: status non-zero and the button word
 flat zero, which is what memory that has never been written looks like, not
 what an idle pad looks like.
 
@@ -83,11 +83,11 @@ PadInitDirect((u_char *)&g_PadBuffer, (u_char *)&g_PadBufferSecondController);
 ```
 
 and the PSYQ signature it calls, `void PadInitDirect(unsigned char *, unsigned
-char *)` — port 1 and port 2. **The game explicitly registers both buffers with
+char *)`, port 1 and port 2. **The game explicitly registers both buffers with
 the pad service at startup.** It then never reads the second one: scanning every
 instruction that references either buffer gives 3 references for port 1 (the
 init, `0x8003354C`, and the pad handler at `0x80053F00`) and exactly **1** for
-port 2 — the init, and nothing else in the game.
+port 2: the init, and nothing else in the game.
 
 On original hardware the BIOS fills a registered buffer every frame whether the
 game reads it or not, which is why the PS1 co-op mod worked at all: it read a
@@ -99,7 +99,7 @@ So the comparison is:
 | --- | --- | --- |
 | Game calls `PadInitDirect(buf1, buf2)` | yes | yes |
 | Pad service fills buffer 1 | yes | yes |
-| Pad service fills buffer 2 | **yes** | **no — flat zeros** |
+| Pad service fills buffer 2 | **yes** | **no, flat zeros** |
 
 Against a stated promise of gameplay bit-identical to original hardware, the
 second argument to `PadInitDirect` not being honoured is a divergence worth
@@ -109,7 +109,7 @@ mod.
 Worth recording which renderer this was measured under: the log reported
 `renderer=1 native=1`, the default. Not retested under other configurations.
 
-### B2 — Does the engine tolerate a mod that runs the tick twice?
+### B2: Does the engine tolerate a mod that runs the tick twice?
 
 OpenPete's headline promise is gameplay bit-identical to PlayStation hardware,
 and its SDK is built around savestates, rewind, runahead and replays. Running
@@ -130,26 +130,26 @@ declared, and the engine's only response was a fair warning that the memory
 cards hold vanilla progress while a mod is active. Nothing refused the mod.
 
 The good news for the finished mod: if player 2's entire state lives in guest
-RAM via `guest_alloc` — the natural design here, and the one the SDK pushes
-toward — then `state = "rebuildable"` is honest and rewind keeps working. That
-is a strong reason to put *everything* in guest allocations rather than in
-mod-side statics.
+RAM via `guest_alloc`, which is the natural design here and the one the SDK
+pushes toward, then `state = "rebuildable"` is honest and rewind keeps
+working. That is a strong reason to put *everything* in guest allocations
+rather than in mod-side statics.
 
-### B3 — Can a mod drive two scene builds through `api->call`?
+### B3: Can a mod drive two scene builds through `api->call`?
 
 Unsettled. It decides whether a first split-screen built on the PS1 mod's own
 rendering approach works at all. Answer it after B1, by overriding the draw
 function and calling it twice.
 
-### B4 — Per-pass rendering.
+### B4: Per-pass rendering.
 
 Not available in the public v0.3.0 API, and not ours to build. Four-player
 split-screen depends on it.
 
 ## 3. How players 3 and 4 would reach the game
 
-Separate from rendering, and unsolved. **The guest only has two pad buffers** —
-`OP_GADDR_g_PadBuffer` and `OP_GADDR_g_PadBufferSecondController` — because the
+Separate from rendering, and unsolved. **The guest only has two pad buffers**,
+`OP_GADDR_g_PadBuffer` and `OP_GADDR_g_PadBufferSecondController`, because the
 original game supported two controllers. Engine slots 3 and 4 existing does not
 mean anything in guest RAM receives them, and the mod API has no general
 host-pad read, only `binding_down` for named keys.
@@ -175,7 +175,7 @@ carrying:
   `OP_GADDR_g_Pad`, `OP_GADDR_g_PadBuffer`,
   `OP_GADDR_g_PadBufferSecondController`, and function addresses for every hook
   site. Struct layouts are pinned with `_Static_assert`, so a layout change
-  upstream becomes a compile error instead of silent corruption — the class of
+  upstream becomes a compile error instead of silent corruption, the class of
   fault that cost the PS1 project the `g_PadBackup` offset bug.
 - **`override_addr` / `override_name` intercept the function, not the call
   site.** The PS1 mod patches 24 individual `jal` instructions, so a call from
@@ -225,7 +225,7 @@ travel with it.
 - **Flight-level pitch (P2).** Framerate-sensitive: a heavy scene raises
   `g_DeltaTime` and vertical steering dies. Spyro2x2 did not solve this either.
   **This one may simply evaporate on OpenPete**, since the cause is the PS1
-  being unable to keep up. Test it early — it would be the first bug the port
+  being unable to keep up. Test it early. It would be the first bug the port
   fixes for free.
 
 Three accepted cosmetic issues (widescreen edge blinking, the shared "+3"
@@ -237,7 +237,7 @@ pickup text, speedway counter layout) are documented in the PS1 repository's
 1. ~~Run the probe. Settle **B1**.~~ **Done 2026-09-12.** The engine slot is
    live and independent; guest buffer 2 is not fed. Blocked on upstream
    plumbing.
-2. Settle **B2** properly — does anything complain once the mod starts
+2. Settle **B2** properly: does anything complain once the mod starts
    *writing* guest RAM, not merely declaring that it will.
 3. Port the per-player state model and swap tables. No rendering yet: one
    viewport, two players, prove the second Spyro ticks and responds. This can

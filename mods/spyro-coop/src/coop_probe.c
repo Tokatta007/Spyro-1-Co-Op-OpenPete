@@ -23,7 +23,7 @@
  * 2,933 vertical blanks and differing from slot 1 for 275 of them, so the
  * engine does read a genuinely independent second pad. This probe read the
  * guest buffer as all zeros across that same session. The gap is therefore
- * the engine-to-guest plumbing for buffer 2 and nothing else — not detection,
+ * the engine-to-guest plumbing for buffer 2 and nothing else: not detection,
  * not SDL mapping, not our addresses. See docs/PORTING.md, B1.
  *
  * The probe writes NOTHING to guest RAM. Reading is enough to answer all

@@ -1,14 +1,14 @@
 # spyro-coop: split-screen co-op for Spyro the Dragon, on OpenPete.
 #
 # STATUS: skeleton. This manifest and its source exist to prove the pipeline
-# end to end — that the mod compiles against the SDK, loads, and gets a
-# per-tick heartbeat — before any co-op logic is ported from the PS1 version.
+# end to end: that the mod compiles against the SDK, loads, and gets a
+# per-tick heartbeat, before any co-op logic is ported from the PS1 version.
 #
 # The three engine-contract keys below are the honest ones for where this is
 # heading, not for what it does today. They are set to the values the FINISHED
 # mod needs, so that if the engine refuses the combination we find out now
-# rather than after porting 130 KB of C. See docs/PORTING.md, "The determinism
-# question", for why this is the first thing to settle.
+# rather than after porting 130 KB of C. See docs/PORTING.md, blocker B2, for
+# why this is the first thing to settle.
 #
 # uses: `api->override_name` - CameraUpdate pre-hook, used as a per-tick heartbeat
 # uses: `api->base` - hands control on so the camera still updates
@@ -25,14 +25,14 @@ api     = 1
 # state: the finished mod keeps a full second set of player state (position,
 # camera, Sparx, pad) that IS derived from guest history, so a state load must
 # carry it. Today the skeleton keeps only a counter. Revisit when the swap
-# tables land — this is deliberately not "none".
+# tables land. This is deliberately not "none".
 state = "none"
 
 # runahead: the finished mod has host-side effects (logging, and eventually its
 # own render pass), so the engine may suppress the hook during speculation.
 runahead = "host-fx"
 
-# sim_mutative: the finished mod writes guest RAM constantly — that is the
+# sim_mutative: the finished mod writes guest RAM constantly, and that is the
 # whole technique, running the game's own tick twice with a second state set
 # swapped in. Declared true from the start so the save modset tag is correct
 # and so we never ship a build that lies about this.

@@ -1,4 +1,4 @@
-# Spyro Co-Op on OpenPete — working notes
+# Spyro Co-Op on OpenPete: working notes
 
 Started 2026-09-11, when the project moved from a Mac laptop to a Windows PC
 and OpenPete v0.3.0 was installed. This file is the working log: how things
@@ -21,7 +21,7 @@ The user is **new to coding**. Please:
 They have a little terminal experience and are **on Windows 11, using
 PowerShell**. Use PowerShell commands, not bash: `Get-FileHash` rather than
 `shasum`, `winget` rather than Homebrew. PowerShell 5.1 has no `&&`, no
-ternary, and no `??` — chain with `;` and `if ($?)`.
+ternary, and no `??`. Chain with `;` and `if ($?)`.
 
 **This is a change from the PS1 project**, which was built entirely on macOS.
 Its `CLAUDE.md` still contains macOS toolchain notes; they are history now, not
@@ -63,7 +63,7 @@ folder beside the executable. The loop is: edit, relaunch OpenPete, read
 
 The mod also publishes live status into the Mods panel: Escape, then Mods.
 
-## The move from macOS, 2026-09-11 — what it cost
+## The move from macOS, 2026-09-11: what it cost
 
 Copying the project from the Mac brought **4,243 AppleDouble metadata files**
 (`._*` and `.DS_Store`). 615 of them landed inside `.git` directories, and two
@@ -74,7 +74,7 @@ Deleting them fixed it. All 4,243 were verified as genuine AppleDouble files
 (magic bytes `00 05 16 07`, max 4 KB) before deletion, not by name alone.
 
 Both `.gitignore` files now carry `._*`. If anything is ever copied from a Mac
-again, check for these first — the symptom looks like repository corruption
+again, check for these first. The symptom looks like repository corruption
 and is not.
 
 ## Open questions, in priority order
@@ -88,7 +88,7 @@ These are tracked properly in `docs/PORTING.md` §3. In short:
    is its headline promise. The manifest declares the finished mod's contract
    rather than the probe's, so a refusal surfaces early.
 3. **Can a mod drive two scene builds through `api->call`?**
-4. **Per-pass rendering** — not ours, no date. Four-player depends on it.
+4. **Per-pass rendering**. Not ours, no date. Four-player depends on it.
 
 ## Rules
 
@@ -97,7 +97,7 @@ These are tracked properly in `docs/PORTING.md` §3. In short:
 - `docs/private/` is gitignored and holds correspondence. **Nothing from it
   goes into a public file unless the other party has said it publicly
   themselves.** That includes undocumented command-line flags he mentioned in
-  private and anything about his roadmap or unreleased work — let him announce
+  private and anything about his roadmap or unreleased work. Let him announce
   it. The specifics are listed in the private notes, not restated here, because
   this file is itself public.
 - **This nearly went wrong on 2026-09-11.** The first draft of `docs/PORTING.md`
@@ -106,18 +106,18 @@ These are tracked properly in `docs/PORTING.md` §3. In short:
   was caught by `git grep`-ing the staged file list before the first push, not
   by remembering the rule. **Run that check before any first push of a new
   repo**, and prefer citing our own measurements over anything he said in
-  private — the measurements are stronger evidence anyway.
-- Spyromain's code is MIT — preserve attribution in any derived file.
+  private. The measurements are stronger evidence anyway.
+- Spyromain's code is MIT, so preserve attribution in any derived file.
 - OpenPete is PolyForm Noncommercial. This repo contains none of its code, only
   a mod compiled against its published SDK headers. Keep it that way.
 
 ## Reference
 
-- PS1 version: `../Spyro-1-CoOp-PS1` — `CHANGES.md` is the canonical record of
+- PS1 version: `../Spyro-1-CoOp-PS1`. `CHANGES.md` is the canonical record of
   every hook, memory allocation and swapped per-player region; `CLAUDE.md` is
   the investigation log. Read both before reimplementing anything.
 - SDK docs: `D:\Games\OpenPete\sdk\docs\index.html`, start at "Getting started"
-- SDK examples: `D:\Games\OpenPete\sdk\examples\` — `hello-anchor` is the
+- SDK examples: `D:\Games\OpenPete\sdk\examples\`. `hello-anchor` is the
   minimal override, `hud-stopwatch` shows the tick/present split, `natural-gems`
   shows a post-hook.
 - Spyro 1 decomp: https://github.com/TheMobyCollective/spyro-1
