@@ -106,10 +106,8 @@ second argument to `PadInitDirect` not being honoured is a divergence worth
 fixing on its own terms, independently of whether anyone ever writes a co-op
 mod.
 
-Worth recording what this run was *not*: the log line `PsyCross OT
-rasterization: OFF (native vk owns display) (renderer=1 native=1)` shows it
-used the default native renderer. Whether the alternate OT-respecting renderer
-path behaves differently on this point is untested.
+Worth recording which renderer this was measured under: the log reported
+`renderer=1 native=1`, the default. Not retested under other configurations.
 
 ### B2 — Does the engine tolerate a mod that runs the tick twice?
 
