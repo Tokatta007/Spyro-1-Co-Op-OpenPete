@@ -24,3 +24,6 @@ docs/private/
 # macOS metadata, in case anything is ever copied from the laptop again.
 .DS_Store
 ._*
+
+# OpenPete compiles the mod in place and drops its artifacts here.
+.build/
