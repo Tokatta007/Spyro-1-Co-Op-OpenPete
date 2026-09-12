@@ -73,6 +73,39 @@ nothing else. It is not controller detection, not SDL mapping, not the gamepad
 database, and not our addresses. That is a narrow, well-localised gap, and it
 is the single concrete thing to ask upstream for.
 
+**And it is a hardware-fidelity gap, not a missing feature.** The obvious
+objection is that Spyro 1 is a single-player game, so nothing should be writing
+controller 2 in the first place. The game itself says otherwise. From the
+decompilation's `GamepadInitialize`:
+
+```c
+PadInitDirect((u_char *)&g_PadBuffer, (u_char *)&g_PadBufferSecondController);
+```
+
+and the PSYQ signature it calls, `void PadInitDirect(unsigned char *, unsigned
+char *)` — port 1 and port 2. **The game explicitly registers both buffers with
+the pad service at startup.** It then never reads the second one: scanning every
+instruction that references either buffer gives 3 references for port 1 (the
+init, `0x8003354C`, and the pad handler at `0x80053F00`) and exactly **1** for
+port 2 — the init, and nothing else in the game.
+
+On original hardware the BIOS fills a registered buffer every frame whether the
+game reads it or not, which is why the PS1 co-op mod worked at all: it read a
+buffer hardware was already populating and the game was already ignoring.
+
+So the comparison is:
+
+| | Original PlayStation | OpenPete v0.3.0 |
+| --- | --- | --- |
+| Game calls `PadInitDirect(buf1, buf2)` | yes | yes |
+| Pad service fills buffer 1 | yes | yes |
+| Pad service fills buffer 2 | **yes** | **no — flat zeros** |
+
+Against a stated promise of gameplay bit-identical to original hardware, the
+second argument to `PadInitDirect` not being honoured is a divergence worth
+fixing on its own terms, independently of whether anyone ever writes a co-op
+mod.
+
 Worth recording what this run was *not*: the log line `PsyCross OT
 rasterization: OFF (native vk owns display) (renderer=1 native=1)` shows it
 used the default native renderer. Whether the alternate OT-respecting renderer
