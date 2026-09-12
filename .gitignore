@@ -1,4 +1,4 @@
-# NEVER commit ROMs, discs, or extracted game assets — project rule, carried
+# NEVER commit ROMs, discs, or extracted game assets. Project rule, carried
 # over from the PS1 repo. Discs live in ../shared/Roms and OpenPete keeps its
 # own copy in its library.
 *.bin
@@ -17,7 +17,7 @@
 # lives in mod.toml and IS tracked; the committed values are not.
 config.toml
 
-# Private working notes — correspondence and anything not ours to publish.
+# Private working notes: correspondence and anything not ours to publish.
 # The repository is public; this directory is not.
 docs/private/
 
