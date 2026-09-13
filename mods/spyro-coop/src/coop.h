@@ -45,6 +45,16 @@ extern openpete_mod_t*           g_self;
 #define SPYRO_OFF_SCRIPT_FOCUS 0x21C  /* pointer func_8003FE40 copies into
                                          g_Camera.m_Focus unchecked */
 
+/* Camera struct offsets, from the decompilation's camera.h (two 20-byte
+   SHORTMATRIX fields come first). */
+#define CAMERA_OFF_POSITION 0x28  /* Vector3D m_Position */
+#define CAMERA_OFF_STATE    0x58  /* u_int m_State, the camera mode */
+#define CAMERA_OFF_FOCUS    0xD0  /* Vector3D* m_Focus, a guest pointer */
+
+/* A camera further than this from its own dragon has run away. The normal
+   follow distance is about 2,560; PS1 measured a runaway at 54,150,062. */
+#define CAMERA_RUNAWAY_DIST 0x4000
+
 /* Gamestates the logic branches on. 0 is gameplay; 4 and 5 are the death
    sequence; 8, 11 and 12 are the dragon rescue, fairy prompt and balloonist,
    which reposition the live dragon without rebuilding the level. */
@@ -98,6 +108,16 @@ typedef struct {
 } CoopMobyArena;
 
 /* ------------------------------------------------------------------------
+ * A third allocation, appended for the same ledger reason as CoopMobyArena.
+ * ---------------------------------------------------------------------- */
+typedef struct {
+    /* Player 2's copy of D_80077798, the vector camera mode 6 and
+       func_8003FE40 point g_Camera.m_Focus at. See BUGS.md A1. */
+    int32_t p2_focus_vector[3];
+    int32_t owner_level;      /* level the moby owner table belongs to */
+} CoopExtraArena;
+
+/* ------------------------------------------------------------------------
  * Host counters. Display only: they reset after a savestate load, which is
  * acceptable for numbers nobody plays against.
  * ---------------------------------------------------------------------- */
@@ -111,6 +131,11 @@ typedef struct {
     unsigned p2_draws, p2_flame_draws, flyin_draws;
     unsigned moby_two_pass, moby_single_pass, moby_fns_hooked;
     unsigned sparx_spawns, pushes;
+    unsigned owner_flips;
+    unsigned cam_on_shared[2];    /* frames each camera focused on D_80077798 */
+    unsigned cam_runaway[2];      /* frames each camera was too far from its dragon */
+    unsigned cam_runaway_events[2];
+    uint32_t cam_max_dist[2];
     unsigned probe_refusals, query_refusals;
     unsigned padvsync_calls, padvsync_in_swap;
 } CoopStats;
@@ -120,6 +145,9 @@ extern CoopStats g_stats;
 /* coop_main.c */
 CoopArena* coop_arena(void);
 CoopMobyArena* coop_moby_arena(void);
+CoopExtraArena* coop_extra_arena(void);
+int        coop_focus_per_player(void);
+int        coop_hysteresis_percent(void);
 int        coop_enabled(void);
 int        coop_draw_enabled(void);
 void       coop_publish_status(void);

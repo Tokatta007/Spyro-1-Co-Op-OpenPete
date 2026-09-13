@@ -42,12 +42,20 @@ override sets it to player 2's position during his pass so his Sparx follows
 him. So a camera frozen on `D_80077798` can have its target moved to the
 **other dragon's** position from one frame to the next, and springs toward it.
 
-**Proposed fix:** make `D_80077798` per player by swapping its 12 bytes with the
-camera, and delete both of the mod's manual writes, which the swap then makes
-redundant (each player's Sparx homes on his own copy). Behind a setting, so the
-same savestate can be replayed with it on and off. Add counters for "camera
-focused on the shared vector" and "camera more than N units from its dragon",
-so the result is measured rather than judged by eye.
+**Fix BUILT 2026-09-12 (v0.3.0), awaiting test.** `D_80077798` is swapped with
+the camera, so each camera has its own copy, and the mod's two manual writes to
+it are skipped. Setting **"Camera focus per player"**, on by default, so the
+same savestate can be replayed with it on and off.
+
+**Measured, not judged by eye.** After every camera update the mod counts, per
+player: frames focused on the shared vector, frames more than 16,384 units from
+its own dragon, and runaway events. Each runaway's start is logged with the
+camera state, the focus pointer, the vector's contents and the dragon's
+position. The M readout shows the totals.
+
+**How to test:** find a ram, save a state just before its charge (key 1), take
+the hit, and load (key 2) to repeat it. Do it with the setting on and off and
+compare the runaway counts.
 
 ### A2. The ram does not settle after its first charge in two-player
 
@@ -86,8 +94,16 @@ was either wrong or incomplete.
   other dragon is at least 25% closer, and a fresh table starts every enemy as
   player 1's.
 
-**Deliberately after A2:** loosening the hysteresis increases ownership flips,
-which is candidate 2 for the ram.
+**Partly addressed 2026-09-12 (v0.3.0), awaiting test.**
+
+- **Fresh table per level.** Every moby now starts owned by its truly nearest
+  dragon on entering a level, instead of inheriting player 1.
+- **The margin is a setting**, "Enemy switch margin (%)", 25 by default (the
+  PS1 value), 0 to 50. Owner changes are counted and shown in the readout.
+
+**Change the margin only after A2 is understood:** a lower margin means more
+ownership flips, which is candidate 2 for the ram. The on-screen bias is not
+addressed and cannot be on one screen.
 
 ---
 

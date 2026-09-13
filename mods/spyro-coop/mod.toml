@@ -22,7 +22,7 @@
 [mod]
 id      = "spyro-coop"
 name    = "Spyro Co-Op"
-version = "0.2.0"
+version = "0.3.0"
 game    = "spyro-1"
 api     = 1
 
@@ -57,3 +57,21 @@ default = true
 label   = "Draw player 2"
 group   = "Co-op"
 help    = "Experimental: draw player 2 with the game's own Spyro renderers."
+
+[[config]]
+key     = "coop.focus_per_player"
+type    = "bool"
+default = true
+label   = "Camera focus per player"
+group   = "Co-op fixes"
+help    = "Give each camera its own copy of the frozen-focus vector a ram hit uses (BUGS.md A1). Off restores the old behaviour, for comparison."
+
+[[config]]
+key     = "coop.hysteresis"
+type    = "int"
+default = 25
+min     = 0
+max     = 50
+label   = "Enemy switch margin (%)"
+group   = "Co-op fixes"
+help    = "How much closer the other dragon must be before an enemy switches to him. 25 is the PS1 value; lower switches sooner (BUGS.md A3)."

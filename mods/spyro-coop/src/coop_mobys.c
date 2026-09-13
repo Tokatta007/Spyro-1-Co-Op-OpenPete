@@ -96,6 +96,20 @@ static unsigned assign_mobys(CoopMobyArena* M, CoopArena* A,
     uint32_t sparx1 = *(uint32_t*)g_api->guest(OP_GADDR_g_Sparx);
     unsigned n;
 
+    /* A new level gets a fresh table, so every moby starts with its truly
+       nearest dragon instead of inheriting player 1 (BUGS.md A3). 3 means
+       "unassigned" and falls through to plain nearest below. */
+    CoopExtraArena* X = coop_extra_arena();
+    if (X->owner_level != coop_level_id()) {
+        memset(M->owner, 3, sizeof M->owner);
+        X->owner_level = coop_level_id();
+    }
+
+    /* Switch owner only when the other dragon is this much closer. 25 is the
+       PS1 value. Lower makes enemies change target more readily, and flips
+       ownership more often, which PS1 found harmful mid-reaction (BUGS.md A2). */
+    int64_t keep = 100 - coop_hysteresis_percent();
+
     for (n = 0; n < MOBY_MAX; n++) {
         int8_t state = (int8_t)mobys[n].m_State;
         if (state == -1)
@@ -114,11 +128,13 @@ static unsigned assign_mobys(CoopMobyArena* M, CoopArena* A,
             int64_t d2 = manhattan(p2, &mobys[n].m_Position);
             uint8_t prev = M->owner[n];
             if (prev == 0)
-                M->owner[n] = (d2 * 4 < d1 * 3) ? 1 : 0;
+                M->owner[n] = (d2 * 100 < d1 * keep) ? 1 : 0;
             else if (prev == 1)
-                M->owner[n] = (d1 * 4 < d2 * 3) ? 0 : 1;
+                M->owner[n] = (d1 * 100 < d2 * keep) ? 0 : 1;
             else
                 M->owner[n] = (d2 < d1) ? 1 : 0;
+            if (prev <= 1 && M->owner[n] != prev)
+                g_stats.owner_flips++;
         }
     }
     return n;
@@ -254,7 +270,10 @@ static void on_moby_update(CPUState* cpu) {
 
         if (M->p2_sparx != 0) {
             *g_sparx = M->p2_sparx;
-            memcpy(anchor, guest32(OP_GADDR_g_Spyro + SPYRO_OFF_POSITION), 12);
+            /* With the focus vector per player, his own copy is already live
+               here, swapped in with his camera. */
+            if (!coop_focus_per_player())
+                memcpy(anchor, guest32(OP_GADDR_g_Spyro + SPYRO_OFF_POSITION), 12);
         }
 
         mask_walk(M, mobys, n, 0, 0);
@@ -263,7 +282,7 @@ static void on_moby_update(CPUState* cpu) {
         mask_walk(M, mobys, n, 0, 1);
 
         *g_sparx = sparx1;
-        if (coop_gamestate() == GS_PLAYING)
+        if (!coop_focus_per_player() && coop_gamestate() == GS_PLAYING)
             memcpy(anchor, saved_anchor, 12);
     }
     g_stats.moby_two_pass++;

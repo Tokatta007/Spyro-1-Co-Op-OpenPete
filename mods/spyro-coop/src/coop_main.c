@@ -13,6 +13,9 @@ CoopStats                 g_stats;
 
 static uint32_t g_arena_vaddr;  /* a guest address, valid across reloads */
 static uint32_t g_moby_vaddr;   /* the moby partition block, likewise */
+static uint32_t g_extra_vaddr;  /* the third block, likewise */
+static int      g_focus_per_player; /* BUGS.md A1 fix, from config */
+static int      g_hysteresis;       /* percent closer to switch owner, from config */
 static int      g_enabled;      /* from config; re-read on every reload */
 static int      g_draw_enabled; /* from config; the visibility experiment */
 
@@ -39,6 +42,12 @@ void coop_log(int level, const char* fmt, ...) {
     va_end(ap);
     g_api->log(g_self, level, "%s", buf);
 }
+
+CoopExtraArena* coop_extra_arena(void) {
+    return (CoopExtraArena*)g_api->guest(g_extra_vaddr);
+}
+int coop_focus_per_player(void)    { return g_focus_per_player; }
+int coop_hysteresis_percent(void)  { return g_hysteresis; }
 
 CoopMobyArena* coop_moby_arena(void) {
     return (CoopMobyArena*)g_api->guest(g_moby_vaddr);
@@ -90,8 +99,13 @@ void coop_publish_status(void) {
                      g_draw_enabled ? "" : " (drawing OFF in settings)");
     coop_status("Moby passes: two-player %u, single %u; update functions hooked %u",
                      g_stats.moby_two_pass, g_stats.moby_single_pass, g_stats.moby_fns_hooked);
-    coop_status("P2 Sparx spawns %u, body pushes %u",
-                     g_stats.sparx_spawns, g_stats.pushes);
+    coop_status("P2 Sparx spawns %u, body pushes %u, moby owner flips %u (switch at %d%% closer)",
+                     g_stats.sparx_spawns, g_stats.pushes, g_stats.owner_flips, g_hysteresis);
+    coop_status("Camera focus per player: %s", g_focus_per_player ? "ON (fix)" : "OFF (old behaviour)");
+    for (int i = 0; i < 2; i++)
+        coop_status("  P%d camera: on shared vector %u frames, runaway %u frames in %u events, max %u away",
+                    i + 1, g_stats.cam_on_shared[i], g_stats.cam_runaway[i],
+                    g_stats.cam_runaway_events[i], g_stats.cam_max_dist[i]);
     coop_status("Gameplay calls: tick %u, camera %u",
                      g_stats.tick_gameplay, g_stats.camera_gameplay);
     coop_status("Other callers: tick %u (last ra 0x%08X), camera %u (last ra 0x%08X)",
@@ -107,7 +121,7 @@ void coop_publish_status(void) {
         coop_log(OP_MOD_LOG_INFO,
                    "tick %u: ready=%u P1(%d,%d,%d) P2(%d,%d,%d) apart=%u | "
                    "p2ticks=%u p2cams=%u seeds=%u reseeds=%u deaths=%u handovers=%u "
-                   "teleports=%u swaps=%u draws=%u flames=%u flyin=%u | mobys 2p=%u 1p=%u fns=%u sparx=%u pushes=%u | other tick=%u ra=0x%08X other cam=%u ra=0x%08X | "
+                   "teleports=%u swaps=%u draws=%u flames=%u flyin=%u | mobys 2p=%u 1p=%u fns=%u sparx=%u pushes=%u flips=%u | cam focus_pp=%d shared=%u/%u runaway=%u/%u events=%u/%u max=%u/%u | other tick=%u ra=0x%08X other cam=%u ra=0x%08X | "
                    "guards probe=%u query=%u | padvsync=%u inswap=%u",
                    g_stats.camera_gameplay, A->ready,
                    p1[0], p1[1], p1[2], p2[0], p2[1], p2[2],
@@ -118,6 +132,11 @@ void coop_publish_status(void) {
                    g_stats.p2_draws, g_stats.p2_flame_draws, g_stats.flyin_draws,
                    g_stats.moby_two_pass, g_stats.moby_single_pass,
                    g_stats.moby_fns_hooked, g_stats.sparx_spawns, g_stats.pushes,
+                   g_stats.owner_flips, g_focus_per_player,
+                   g_stats.cam_on_shared[0], g_stats.cam_on_shared[1],
+                   g_stats.cam_runaway[0], g_stats.cam_runaway[1],
+                   g_stats.cam_runaway_events[0], g_stats.cam_runaway_events[1],
+                   g_stats.cam_max_dist[0], g_stats.cam_max_dist[1],
                    g_stats.tick_other, g_stats.tick_other_ra,
                    g_stats.camera_other, g_stats.camera_other_ra,
                    g_stats.probe_refusals, g_stats.query_refusals,
@@ -141,6 +160,10 @@ int openpete_mod_entry(const openpete_mod_api_t* api, openpete_mod_t* self) {
 
     g_enabled      = api->config_bool(self, "coop.enabled", 1);
     g_draw_enabled = api->config_bool(self, "coop.draw", 1);
+    g_focus_per_player = api->config_bool(self, "coop.focus_per_player", 1);
+    g_hysteresis = (int)api->config_int(self, "coop.hysteresis", 25);
+    if (g_hysteresis < 0)  g_hysteresis = 0;
+    if (g_hysteresis > 50) g_hysteresis = 50;
 
     /* One allocation, at entry, every time. The engine replays the
        allocation sequence on reload and hands back the same bytes, so this
@@ -157,6 +180,19 @@ int openpete_mod_entry(const openpete_mod_api_t* api, openpete_mod_t* self) {
     if (g_moby_vaddr == 0) {
         coop_log(OP_MOD_LOG_ERROR, "could not allocate the moby table");
         return 1;
+    }
+    g_extra_vaddr = api->guest_alloc(self, sizeof(CoopExtraArena), 4, 0, &view);
+    if (g_extra_vaddr == 0) {
+        coop_log(OP_MOD_LOG_ERROR, "could not allocate the extra block");
+        return 1;
+    }
+    /* A settings change reloads the mod mid-level. If the per-player focus
+       vector was just switched on, player 2's copy may be empty: start it at
+       his own position rather than at the world origin. */
+    if (g_focus_per_player && coop_arena()->ready) {
+        CoopExtraArena* X = coop_extra_arena();
+        if (X->p2_focus_vector[0] == 0 && X->p2_focus_vector[1] == 0 && X->p2_focus_vector[2] == 0)
+            memcpy(X->p2_focus_vector, coop_arena()->spyro + SPYRO_OFF_POSITION, 12);
     }
 
     if (coop_players_install() != 0 || coop_draw_install() != 0 ||

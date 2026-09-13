@@ -123,6 +123,22 @@ static void swap_camera(CoopArena* A) {
         int32_t* l = guest32(k_camera_extra[i]);
         int32_t t = *l; *l = A->camera_extra[i]; A->camera_extra[i] = t;
     }
+
+    /* THE SHARED FOCUS VECTOR (BUGS.md A1). Camera mode 6, which a ram's
+       charge triggers, copies the focus into the global D_80077798 and aims
+       g_Camera.m_Focus at it; func_8003FE40 does the same for a moby Spyro is
+       using. m_Focus is per player, inside g_Camera, but the vector it points
+       at was shared, so one player's camera could be retargeted at the other
+       dragon. Swapping it with the camera gives each camera its own. The mod's
+       two manual writes to it (for Sparx) become unnecessary and are skipped
+       while this is on. */
+    if (coop_focus_per_player()) {
+        int32_t* v = guest32(OP_GADDR_D_80077798);
+        int32_t* s = coop_extra_arena()->p2_focus_vector;
+        for (int i = 0; i < 3; i++) {
+            int32_t t = v[i]; v[i] = s[i]; s[i] = t;
+        }
+    }
 }
 
 static void swap_pad(CoopArena* A) {
@@ -199,6 +215,7 @@ static void seed_player2(CoopArena* A) {
     memcpy(A->camera, guest8(OP_GADDR_g_Camera), CAMERA_STRUCT_BYTES);
     for (unsigned i = 0; i < CAMERA_EXTRA_COUNT; i++)
         A->camera_extra[i] = *guest32(k_camera_extra[i]);  /* or he starts with garbage */
+    memcpy(coop_extra_arena()->p2_focus_vector, guest32(OP_GADDR_D_80077798), 12);
     walk(k_pad_regions, COUNT(k_pad_regions), A->pad, 0);
 
     A->last_level = level_id();
@@ -425,7 +442,7 @@ static void on_spyro_tick(CPUState* cpu) {
         g_stats.p2_ticks++;
 
         *substeps = after_p1;                          /* consumed once */
-        if (gamestate() == GS_PLAYING) {
+        if (!coop_focus_per_player() && gamestate() == GS_PLAYING) {
             /* followers (Sparx) track player 1, not the midpoint */
             anchor[0] = saved_anchor[0];
             anchor[1] = saved_anchor[1];
@@ -459,6 +476,50 @@ static void on_spyro_tick(CPUState* cpu) {
 }
 
 /* ------------------------------------------------------------------------
+ * Camera measurement (BUGS.md A1). Called right after each player's camera
+ * update, while that player's camera and dragon are the live ones. Counts
+ * frames spent focused on the shared vector and frames spent too far from
+ * the dragon, and logs the start of each runaway, so a fix is judged by
+ * numbers from a replayed savestate rather than by eye.
+ * ---------------------------------------------------------------------- */
+static uint8_t g_cam_was_runaway[2];  /* edge detection, display only */
+
+static void measure_camera(int player) {
+    uint8_t* cam   = guest8(OP_GADDR_g_Camera);
+    int32_t* cpos  = (int32_t*)(cam + CAMERA_OFF_POSITION);
+    uint32_t focus = *(uint32_t*)(cam + CAMERA_OFF_FOCUS);
+    uint32_t state = *(uint32_t*)(cam + CAMERA_OFF_STATE);
+    int32_t* spos  = live_position();
+
+    int on_shared = (focus == OP_GADDR_D_80077798);
+    if (on_shared)
+        g_stats.cam_on_shared[player]++;
+
+    int64_t dx = (int64_t)cpos[0] - spos[0];
+    int64_t dy = (int64_t)cpos[1] - spos[1];
+    int64_t dz = (int64_t)cpos[2] - spos[2];
+    uint32_t dist = isqrt64((uint64_t)(dx * dx + dy * dy + dz * dz));
+    if (dist > g_stats.cam_max_dist[player])
+        g_stats.cam_max_dist[player] = dist;
+
+    int runaway = dist > CAMERA_RUNAWAY_DIST;
+    if (runaway) {
+        g_stats.cam_runaway[player]++;
+        if (!g_cam_was_runaway[player]) {
+            g_stats.cam_runaway_events[player]++;
+            int32_t* v = guest32(OP_GADDR_D_80077798);
+            coop_log(OP_MOD_LOG_WARN,
+                     "P%d camera ran away: %u from its dragon, state 0x%08X, focus 0x%08X%s, "
+                     "shared vector (%d,%d,%d), dragon (%d,%d,%d), focus per player %s",
+                     player + 1, dist, state, focus, on_shared ? " (the shared vector)" : "",
+                     v[0], v[1], v[2], spos[0], spos[1], spos[2],
+                     coop_focus_per_player() ? "on" : "off");
+        }
+    }
+    g_cam_was_runaway[player] = (uint8_t)runaway;
+}
+
+/* ------------------------------------------------------------------------
  * Override: the camera update. Ported from Sp1x2UpdateCameras.
  * ---------------------------------------------------------------------- */
 static void on_camera_update(CPUState* cpu) {
@@ -477,12 +538,14 @@ static void on_camera_update(CPUState* cpu) {
     save_regs(cpu, &regs);
 
     g_api->base(cpu);                                  /* player 1 */
+    measure_camera(0);
 
     if (coop_enabled() && A->ready) {
         swap_all(A);
         load_regs(cpu, &regs);
         g_api->base(cpu);                              /* player 2 */
         g_stats.p2_cameras++;
+        measure_camera(1);
 
         /* Consume his edge latches after his last reader this frame, or they
            accumulate. Harmless while his input is copied fresh each frame,
