@@ -359,6 +359,7 @@ static void maybe_swap_view(CoopArena* A) {
     swap_all(A);
     A->swapped = 0;            /* identities traded, not mid-override */
     resample_teleport(A);      /* anything that moves a live dragon does this */
+    coop_mobys_identities_swapped();
     g_stats.view_swaps++;
 }
 
@@ -507,13 +508,33 @@ static void measure_camera(int player) {
         g_stats.cam_runaway[player]++;
         if (!g_cam_was_runaway[player]) {
             g_stats.cam_runaway_events[player]++;
-            int32_t* v = guest32(OP_GADDR_D_80077798);
+
+            /* Whichever player's turn this is, the OTHER dragon is the one in
+               the shadow copy. A camera sitting close to him and far from its
+               own dragon was built around the wrong one. */
+            const int32_t* other = (const int32_t*)(coop_arena()->spyro + SPYRO_OFF_POSITION);
+            int64_t ox = (int64_t)cpos[0] - other[0];
+            int64_t oy = (int64_t)cpos[1] - other[1];
+            int64_t oz = (int64_t)cpos[2] - other[2];
+            uint32_t to_other = isqrt64((uint64_t)(ox * ox + oy * oy + oz * oz));
+            int64_t px = (int64_t)spos[0] - other[0];
+            int64_t py = (int64_t)spos[1] - other[1];
+            int64_t pz = (int64_t)spos[2] - other[2];
+            uint32_t apart = isqrt64((uint64_t)(px * px + py * py + pz * pz));
+
+            /* If the focus is a pointer into guest RAM, say what it points at. */
+            int32_t* fv = focus ? (int32_t*)g_api->guest(focus) : NULL;
+
             coop_log(OP_MOD_LOG_WARN,
-                     "P%d camera ran away: %u from its dragon, state 0x%08X, focus 0x%08X%s, "
-                     "shared vector (%d,%d,%d), dragon (%d,%d,%d), focus per player %s",
-                     player + 1, dist, state, focus, on_shared ? " (the shared vector)" : "",
-                     v[0], v[1], v[2], spos[0], spos[1], spos[2],
-                     coop_focus_per_player() ? "on" : "off");
+                     "P%d camera ran away: %u from its dragon, %u from the other dragon "
+                     "(dragons %u apart%s) | state 0x%08X | focus 0x%08X -> (%d,%d,%d)%s | "
+                     "camera (%d,%d,%d) own dragon (%d,%d,%d) other dragon (%d,%d,%d)",
+                     player + 1, dist, to_other, apart,
+                     (to_other * 2u < dist) ? ", CLOSER TO THE OTHER DRAGON" : "",
+                     state, focus, fv ? fv[0] : 0, fv ? fv[1] : 0, fv ? fv[2] : 0,
+                     on_shared ? " (shared vector)" : "",
+                     cpos[0], cpos[1], cpos[2], spos[0], spos[1], spos[2],
+                     other[0], other[1], other[2]);
         }
     }
     g_cam_was_runaway[player] = (uint8_t)runaway;

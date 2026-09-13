@@ -206,6 +206,31 @@ static void p2_sparx_keep(CPUState* cpu, CoopMobyArena* M) {
 }
 
 /* ------------------------------------------------------------------------
+ * The view-swap key traded the two dragons' identities. Ownership is stored
+ * per slot (0 = whoever is player 1), so without this every moby would be
+ * reassigned to the other physical dragon at once: a ram charging one dragon
+ * would suddenly be driven against the other. Measured 2026-09-12: 1,374
+ * owner changes in a session with 16 presses. Swap the owner values so each
+ * moby keeps its dragon, and trade the two Sparx so each keeps following his.
+ * ---------------------------------------------------------------------- */
+void coop_mobys_identities_swapped(void) {
+    CoopMobyArena* M = coop_moby_arena();
+    for (unsigned i = 0; i < MOBY_MAX; i++) {
+        if (M->owner[i] == 0)      M->owner[i] = 1;
+        else if (M->owner[i] == 1) M->owner[i] = 0;
+    }
+
+    uint32_t* g_sparx = (uint32_t*)g_api->guest(OP_GADDR_g_Sparx);
+    if (*g_sparx != 0 && M->p2_sparx != 0) {
+        uint32_t t = *g_sparx;
+        *g_sparx = M->p2_sparx;
+        M->p2_sparx = t;
+        /* The new g_Sparx is not a level rebuild; tell the detector so. */
+        M->sparx1_seen = *g_sparx;
+    }
+}
+
+/* ------------------------------------------------------------------------
  * The override
  * ---------------------------------------------------------------------- */
 

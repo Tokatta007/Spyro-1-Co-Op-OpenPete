@@ -165,6 +165,7 @@ int32_t coop_level_id(void);
 
 /* coop_mobys.c */
 void coop_mobys_track(void);
+void coop_mobys_identities_swapped(void);
 
 /* coop_draw.c */
 int  coop_draw_install(void);  /* gameplay draw and portal fly-in */

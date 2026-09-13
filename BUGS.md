@@ -4,58 +4,50 @@ What is wrong, what is missing, and what has been decided. When an item is
 fixed and confirmed, delete it here and record the fix in
 `docs/PORT-INVENTORY.md`.
 
-Last reviewed: 2026-09-12.
+Last reviewed: 2026-09-13.
 
 ---
 
 ## 1. Active
 
-### A1. A camera flies off after a ram hit, and the guards start refusing coordinates
+### A1. A camera runs away from its dragon, most visibly after a ram hit
 
-**Seen 2026-09-12**, on one screen, the same symptom as PS1 bug P1 ("a camera
-flies stratosphere-high and springs back"). So it was never a split-screen
-artefact.
+**Seen 2026-09-12 and 2026-09-13**, on one screen, the same family as PS1 bug P1.
 
-**Measured in the same session:** the collision guards refused **46** impossible
-coordinates (probe 34, query 12). Every earlier session refused zero. On PS1
-those refusals were each an averted freeze, and the coordinates came from a
-camera gone wild after a ram hit.
+**Suspect 1, the shared frozen-focus vector: RULED OUT 2026-09-13.** Camera
+mode 6 and `func_8003FE40` can aim `g_Camera.m_Focus` at the global
+`D_80077798`, and a per-player copy was built and tested. It changed nothing,
+and the measurement says why: in every runaway logged that session the vector
+read **(0, 0, 0)** and no camera was ever focused on it. Replaying one savestate
+gave identical events with the setting on and off. The setting remains, off
+by effect; it can be removed once A1 is solved.
 
-**Leading suspect, from the game's own assembly, not yet tested.** PS1's
-`CLAUDE.md` named this as "next suspect" on 2026-08-27 and it was never tried.
+**What the measurements show instead** (one session, savestates replayed):
 
-`D_80077798` is a single global 3-vector, not part of `g_Camera` and not
-swapped per player. Two places point the camera's focus at it:
+- Every event is **deterministic**: the same savestate produced the same event
+  at the same distance, 16,464, eight times.
+- Distances are **16,000 to 18,000**, not millions. PS1's single 54 million
+  reading came from a null focus, which the arming fix already covers.
+- Two kinds:
+  - **Camera state `0x8000000A`, focus on a moby's position** (`0x8017xxxx`,
+    a moby's `m_Position`). This is the mode `func_8003FE40` sets from
+    `g_Spyro + 0x21C`. The camera looks at an object, probably the ram, from
+    about 17,000 away.
+  - **Camera state `0x80000010`, focus on the dragon itself**, yet placed 16,464
+    away from him.
+- **At the second kind the dragons were 16,025 apart**, almost exactly the
+  camera's distance from its own dragon. That is the PS1 signature of a camera
+  built around the other dragon. Not proven: the camera's position relative to
+  player 2 was not logged.
 
-- **Camera mode 6** (`func_80035FB4`, `0x800368EC`): if `g_Camera.m_Focus` is
-  not already `&D_80077798`, copy the current focus into it and set
-  `m_Focus = &D_80077798`. The camera then follows **that global**. Spyro
-  state 29, "charge interrupted", which is what a ram inflicts, maps to this
-  mode.
-- **`func_8003FE40`** (`0x80040528`), in Spyro's tick, for the moby Spyro is
-  using: set `m_Focus = &D_80077798` and copy that moby's position into it.
+**Now logged (v0.3.0, unreleased build of 2026-09-13):** each runaway reports
+the camera's distance to the other dragon, how far apart the dragons are, the
+camera's and both dragons' positions, and what the focus pointer points at, and
+flags `CLOSER TO THE OTHER DRAGON` when that is the case.
 
-`m_Focus` is per player, because it lives inside the swapped `g_Camera`. The
-vector it points to is **shared**. And the mod writes that vector itself: the
-tick override restores player 1's value after player 2's tick, and the moby
-override sets it to player 2's position during his pass so his Sparx follows
-him. So a camera frozen on `D_80077798` can have its target moved to the
-**other dragon's** position from one frame to the next, and springs toward it.
-
-**Fix BUILT 2026-09-12 (v0.3.0), awaiting test.** `D_80077798` is swapped with
-the camera, so each camera has its own copy, and the mod's two manual writes to
-it are skipped. Setting **"Camera focus per player"**, on by default, so the
-same savestate can be replayed with it on and off.
-
-**Measured, not judged by eye.** After every camera update the mod counts, per
-player: frames focused on the shared vector, frames more than 16,384 units from
-its own dragon, and runaway events. Each runaway's start is logged with the
-camera state, the focus pointer, the vector's contents and the dragon's
-position. The M readout shows the totals.
-
-**How to test:** find a ram, save a state just before its charge (key 1), take
-the hit, and load (key 2) to repeat it. Do it with the setting on and off and
-compare the runaway counts.
+**The deciding test still to run: the same savestate with Player 2 off.** If the
+camera does the same thing in the unmodded game, it is retail behaviour and the
+runaway threshold is too low. If it does not, player 2 causes it.
 
 ### A2. The ram does not settle after its first charge in two-player
 
@@ -68,12 +60,23 @@ a fix aimed at it, credited (unproven) to the `g_PadBackup` offset typo that was
 zeroing enemy model pointers. That typo cannot exist here, so that explanation
 was either wrong or incomplete.
 
+**Found and fixed 2026-09-13: the view-swap key reassigned every moby.**
+Ownership is stored per slot, and the key trades which dragon is in which
+slot, so every press handed each moby to the other physical dragon. That session
+logged 1,374 owner changes with 16 presses, and the user saw a ram change target
+right after swapping views. The key now swaps the owner values and the two
+Sparx, so each stays with its dragon. This removes a test artefact; it is not
+expected to be the root of A2, which appears without pressing the key.
+
+Also seen: a ram running in place toward player 2 while player 1 was closer.
+Consistent with the hysteresis, which keeps a moby's owner until the other
+dragon is 25% closer, but not proven for that ram.
+
 **Candidates, in order:**
 
-1. **The shared camera focus vector (A1).** The ram's own level code calls
+1. **The camera runaway (A1).** The ram's own level code calls
    camera functions directly (`func_level_20_8007E3A0` calls `func_800342F8`
-   and `func_80033F08`), so its behaviour and the camera are coupled. Fixing A1
-   first is cheap and may change this.
+   and `func_80033F08`), so its behaviour and the camera are coupled.
 2. **Ownership flipping during its return.** The ram moves a long way between
    the dragons on a charge, so it can cross the 25% hysteresis margin and be
    updated against the other dragon mid-behaviour. PS1 established that a flip
@@ -109,19 +112,16 @@ addressed and cannot be on one screen.
 
 ## 2. Missing, planned
 
-### M1. Player 2 in the portal fly-in and exit: BUILT, awaiting test
+### M1. Player 2 in the portal fly-in and exit: WORKS
 
-Built 2026-09-12 in `coop_draw.c` (`on_spyro_model`). Ported from
-`Sp1x2DrawPortalSpyro`, and extended: PS1 covered the level transition and the
-entrance landing (gamestates 1 and 9, one call at `0x8001A0D8`), and missed
-the level exit (gamestate 10, `0x8001C964`), which is now included. Draws a
-second copy of player 1's dragon along his wing line using the same offset as
-seeding, restoring his position and flame matrix afterwards.
+Confirmed by the user 2026-09-13. `coop_draw.c`, `on_spyro_model`: the level
+transition and entrance landing (gamestates 1 and 9, `0x8001A0D8`) and the
+level exit (gamestate 10, `0x8001C964`, which the PS1 build never covered).
 
-**Also an experiment:** unlike the gameplay draw, this calls `base()` twice
-inside the model renderer's own override. Check whether the wingman stays
-visible with interpolation **on**. If he does, the gameplay draw can be moved
-to the same shape and X1 may go away.
+**The interpolation experiment it carried failed:** the wingman disappears when
+interpolation is on, just like the gameplay draw. Calling `base()` twice inside
+the renderer's own override does not get the second dragon into the engine's
+per-path bookkeeping either. X1 stands.
 
 ### M2. Individual death and respawn
 
