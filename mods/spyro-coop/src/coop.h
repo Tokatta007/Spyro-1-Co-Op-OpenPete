@@ -186,6 +186,29 @@ typedef struct {
     int32_t    health_carry[COOP_MAX_PLAYERS][2]; /* per slot: pending, health */
 } CoopPartyArena;
 
+/* ------------------------------------------------------------------------
+ * A seventh allocation, appended for the ledger reason above: scratch for the
+ * respawn effects (coop_effects.c), whose particle and moby calls read vectors
+ * and a stand-in Moby by pointer, and the test key's last state.
+ * ---------------------------------------------------------------------- */
+typedef struct {
+    uint8_t  scratch[16 + 0x58];
+    uint32_t test_key_down;
+} CoopFxArena;
+
+enum {
+    RESPAWN_FX_BLINK_ONLY,
+    RESPAWN_FX_SMOKE,
+    RESPAWN_FX_WHITE_SPARKS,
+    RESPAWN_FX_ORANGE_SPARKS,
+    RESPAWN_FX_DUST_RING,
+    RESPAWN_FX_COLOUR_FLASH,
+    RESPAWN_FX_CHEST_BREAK,
+    RESPAWN_FX_MAGIC_POP,
+    RESPAWN_FX_CRYSTAL,
+    RESPAWN_EFFECT_COUNT
+};
+
 /* One shadow slot's buffers, wherever they live. */
 typedef struct {
     uint8_t*  spyro;
@@ -226,6 +249,7 @@ typedef struct {
     unsigned probe_refusals, query_refusals;
     unsigned padvsync_calls, padvsync_in_swap;
     unsigned menu_opens;          /* Multiplayer page opened from the pause list */
+    unsigned effects_played;      /* respawn effects, real and tested */
 } CoopStats;
 
 extern CoopStats g_stats;
@@ -238,6 +262,7 @@ typedef struct {
     int     respawn_modern;  /* 1 modern, 0 original */
     int     split_vertical;  /* 1 vertical, 0 horizontal; no effect until split-screen exists */
     uint8_t color[COOP_MAX_PLAYERS][4]; /* per player: red, green, blue, strength */
+    int     respawn_effect;  /* RESPAWN_FX_*, chosen on the test bench */
     int     draw_p2;         /* development */
     int     hysteresis;      /* development: enemy switch margin, percent */
 } CoopSettings;
@@ -286,6 +311,7 @@ void coop_mobys_identities_swapped(int slot);  /* slot traded identities with sl
 
 /* coop_respawn.c */
 int  coop_respawn_install(void);
+#define COOP_RESPAWN_BLINK_TICKS 45        /* about 1.5 seconds */
 void coop_respawn_blink_tick(void);   /* count down the live dragon's blink */
 int  coop_respawn_blink_hidden(void); /* the live dragon is in an "off" blink tick */
 void coop_capture_spawn(void);
@@ -299,6 +325,12 @@ void coop_tint_state(void);    /* keep both dragons' colour in game state */
 /* coop_menu.c */
 int  coop_menu_install(uint32_t menu_vaddr);
 int  coop_menu_drawing_preview(void);  /* the Colors page is drawing a preview dragon */
+
+/* coop_effects.c */
+extern const char* const k_respawn_effect_names[RESPAWN_EFFECT_COUNT];
+void coop_effects_init(uint32_t fx_vaddr);
+void coop_effect_play(CPUState* cpu, int effect, int person);
+void coop_effects_tick(CPUState* cpu);   /* the test key */
 
 /* coop_gates.c */
 int  coop_gates_install(void);

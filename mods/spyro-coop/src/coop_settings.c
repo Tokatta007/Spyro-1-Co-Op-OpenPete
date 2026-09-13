@@ -45,6 +45,7 @@ static void set_defaults(CoopSettings* s) {
     s->split_vertical = 1;
     for (int i = 0; i < COOP_MAX_PLAYERS; i++)
         memcpy(s->color[i], k_default_color, 4);
+    s->respawn_effect = RESPAWN_FX_BLINK_ONLY;
     s->draw_p2        = 1;
     s->hysteresis     = 25;
 }
@@ -54,6 +55,8 @@ static void clamp(CoopSettings* s) {
     s->respawn_modern = s->respawn_modern ? 1 : 0;
     s->split_vertical = s->split_vertical ? 1 : 0;
     s->draw_p2        = s->draw_p2 ? 1 : 0;
+    if (s->respawn_effect < 0 || s->respawn_effect >= RESPAWN_EFFECT_COUNT)
+        s->respawn_effect = RESPAWN_FX_BLINK_ONLY;
     if (s->hysteresis < 0)  s->hysteresis = 0;
     if (s->hysteresis > 50) s->hysteresis = 50;
 }
@@ -84,6 +87,7 @@ void coop_settings_save(void) {
     for (int i = 0; i < COOP_MAX_PLAYERS; i++)
         fprintf(f, "p%d_color = %d %d %d %d\n", i + 1,
                 s->color[i][0], s->color[i][1], s->color[i][2], s->color[i][3]);
+    fprintf(f, "respawn_effect = %d\n", s->respawn_effect);
     fprintf(f, "draw_p2 = %d\n", s->draw_p2);
     fprintf(f, "enemy_switch_margin = %d\n", s->hysteresis);
     fclose(f);
@@ -112,7 +116,9 @@ void coop_settings_load(void) {
                 if (sscanf(val, "%d %d %d %d", &c[0], &c[1], &c[2], &c[3]) == 4)
                     for (int k = 0; k < 4; k++)
                         s->color[i][k] = (uint8_t)(c[k] < 0 ? 0 : c[k] > 255 ? 255 : c[k]);
-            } else if (!strcmp(key, "draw_p2"))
+            } else if (!strcmp(key, "respawn_effect"))
+                s->respawn_effect = atoi(val);
+            else if (!strcmp(key, "draw_p2"))
                 s->draw_p2 = atoi(val);
             else if (!strcmp(key, "enemy_switch_margin"))
                 s->hysteresis = atoi(val);
@@ -202,6 +208,15 @@ static void settings_panel(const openpete_mod_ui_t* ui) {
     ui->text("Colours (strength 0 leaves Spyro's own colour)");
     for (int p = 0; p < COOP_MAX_PLAYERS; p++)
         color_rows(ui, p, &changed);
+
+    ui->separator();
+    ui->text("Respawn effect (test bench)");
+    idx = g_ui_copy.respawn_effect;
+    if (ui->combo("Respawn effect", &idx, k_respawn_effect_names, RESPAWN_EFFECT_COUNT)) {
+        g_ui_copy.respawn_effect = idx; changed = 1;
+    }
+    ui->tooltip("Plays when a dragon respawns on his own, with the blink. Press O in "
+                "a level or homeworld to try it on your dragon without dying.");
 
     ui->separator();
     ui->text_disabled("Development");

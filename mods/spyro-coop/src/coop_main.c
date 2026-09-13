@@ -17,6 +17,7 @@ static uint32_t g_extra_vaddr;  /* the third block, likewise */
 static uint32_t g_respawn_vaddr;  /* the fourth block, likewise */
 static uint32_t g_menu_vaddr;     /* the fifth block, likewise */
 static uint32_t g_party_vaddr;    /* the sixth block: players 3 and 4 */
+static uint32_t g_fx_vaddr;       /* the seventh block: respawn effect scratch */
 
 CoopArena* coop_arena(void) {
     /* Resolved on every use: the host view is not promised to survive a
@@ -216,6 +217,12 @@ int openpete_mod_entry(const openpete_mod_api_t* api, openpete_mod_t* self) {
         coop_log(OP_MOD_LOG_ERROR, "could not allocate the players 3 and 4 block");
         return 1;
     }
+    g_fx_vaddr = api->guest_alloc(self, sizeof(CoopFxArena), 4, 0, &view);
+    if (g_fx_vaddr == 0) {
+        coop_log(OP_MOD_LOG_ERROR, "could not allocate the effects block");
+        return 1;
+    }
+    coop_effects_init(g_fx_vaddr);
 
 
     if (coop_players_install() != 0 || coop_draw_install() != 0 ||

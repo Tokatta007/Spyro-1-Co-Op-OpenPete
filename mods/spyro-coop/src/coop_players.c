@@ -533,6 +533,7 @@ static void on_spyro_tick(CPUState* cpu) {
         if (A->ready)
             coop_players_disable();
         g_api->base(cpu);
+        coop_effects_tick(cpu);              /* the test bench works solo too */
         return;
     }
 
@@ -640,6 +641,7 @@ static void on_spyro_tick(CPUState* cpu) {
     /* Every dragon has moved this frame: resolve any overlap. */
     separate_players(A);
     maybe_swap_view(A);
+    coop_effects_tick(cpu);
 }
 
 /* ------------------------------------------------------------------------

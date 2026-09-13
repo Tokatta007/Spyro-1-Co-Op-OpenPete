@@ -46,7 +46,7 @@
 #define HUD_OFF_LIFE_COUNT    0x28
 
 #define RESPAWN_INVULN   90       /* the engine's own i-frame count */
-#define RESPAWN_BLINK    45       /* ticks of blinking in, about 1.5 seconds */
+#define RESPAWN_BLINK    COOP_RESPAWN_BLINK_TICKS
 #define BLINK_PERIOD     3        /* ticks shown, then ticks hidden */
 #define RESPAWN_HEALTH   3
 
@@ -328,6 +328,7 @@ static void on_trigger_respawn(CPUState* cpu) {
 
     *guest32(OP_GADDR_g_Spyro + SPYRO_OFF_INVULN) = RESPAWN_INVULN;
     *guest32(OP_GADDR_g_Spyro + SPYRO_OFF_RESPAWN_BLINK) = RESPAWN_BLINK;
+    coop_effect_play(cpu, g_settings.respawn_effect, coop_physical_player(dying));
 
     load_regs(cpu, &regs);
     g_stats.individual_respawns++;

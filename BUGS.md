@@ -71,7 +71,30 @@ crash still ends the run for everyone; the user would prefer the crasher sits
 out, but accepts it for now.
 
 v0.8.1: spacing back to the PS1 640 at the user's request, and a respawned
-dragon blinks in for 45 ticks (see M7).
+dragon blinks in for 45 ticks (M7).
+
+### M7. Respawn arrival: blink (v0.8.1) and an effect test bench (v0.9.0)
+
+A dragon who respawns on his own blinks in for 45 ticks. On top of that the
+user wants an arrival effect, chosen by trying them: "Respawn effect" in the
+M panel picks one of eight, and O plays it on the camera's dragon without
+dying (`coop_effects.c`). All are the game's own particles or crystal pieces,
+work in every homeworld and level, and were each seen drawing in the native
+renderer headless (`shots/respawn-effects-v090.png`): smoke puff, white
+sparks, orange sparks, dust ring, colour flash in the player's colour, chest
+break, magic pop, and the crystal burst (the rescue crystal's pieces; only in
+levels with dragons, which is every place a respawn happens).
+
+The user's crystal-dragon idea as a whole is not possible: the crystal's
+shake is its own moby's animation, and spawning that moby starts the rescue
+cutscene. Once one is chosen, the bench's extra options and key can go.
+
+### M8. Flight levels: a crash should sit a player out
+
+User request 2026-09-13. Flight levels have no respawns, and a crash ends the
+run for everyone; with several players the one who crashed should wait while
+the others finish. Not investigated yet: the flight crash may not go through
+TriggerRespawnOrGameOver.
 
 ### M5. In-game Multiplayer and Color menus: stages 1 to 3 BUILT; stage 4 blocked on the engine
 
