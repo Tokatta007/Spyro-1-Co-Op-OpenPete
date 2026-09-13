@@ -3,8 +3,8 @@
  * @brief Shared declarations for the spyro-coop mod.
  *
  * Phase A of docs/PORT-INVENTORY.md: a second Spyro whose tick and camera
- * update run every frame alongside player 1's, borrowing player 1's input.
- * Nothing is drawn for him yet. See that document for why each piece exists
+ * update run every frame alongside player 1's, borrowing player 1's input,
+ * plus an experiment in drawing him (coop_draw.c). See that document for why each piece exists
  * and what it was on the PlayStation.
  *
  * Derived from the PS1 Spyro 1 Co-Op Mod, itself derived from Spyromain's
@@ -88,6 +88,7 @@ typedef struct {
     unsigned p2_ticks, p2_cameras;
     unsigned seeds, level_reseeds, deaths, handovers, teleports;
     unsigned view_swaps;
+    unsigned p2_draws, p2_flame_draws;
     unsigned probe_refusals, query_refusals;
     unsigned padvsync_calls, padvsync_in_swap;
 } CoopStats;
@@ -97,12 +98,17 @@ extern CoopStats g_stats;
 /* coop_main.c */
 CoopArena* coop_arena(void);
 int        coop_enabled(void);
+int        coop_draw_enabled(void);
 void       coop_publish_status(void);
 
 /* coop_players.c */
 int  coop_players_install(void);
 void coop_players_disable(void);
 void coop_p2_position(int32_t out[3]);
+void coop_swap_spyro(void);
+
+/* coop_draw.c */
+int  coop_draw_install(void);
 
 /* coop_gates.c */
 int  coop_gates_install(void);
@@ -111,6 +117,18 @@ int  coop_gates_install(void);
 int  coop_pad_install(void);
 void coop_pad_sample(void);
 void coop_pad_status(void);
+
+/* Registers an override relies on across base() or api->call(). The CPUState
+   reference: expect a0..a3, v0, v1 and ra to have changed across either. */
+typedef struct { uint32_t a0, a1, a2, a3, v0, v1, ra; } SavedRegs;
+static inline void save_regs(const CPUState* c, SavedRegs* s) {
+    s->a0 = c->a0; s->a1 = c->a1; s->a2 = c->a2; s->a3 = c->a3;
+    s->v0 = c->v0; s->v1 = c->v1; s->ra = c->ra;
+}
+static inline void load_regs(CPUState* c, const SavedRegs* s) {
+    c->a0 = s->a0; c->a1 = s->a1; c->a2 = s->a2; c->a3 = s->a3;
+    c->v0 = s->v0; c->v1 = s->v1; c->ra = s->ra;
+}
 
 /* Guest memory, by address. Host pointers are valid for this process only,
    so they are resolved on use rather than cached across reloads. */

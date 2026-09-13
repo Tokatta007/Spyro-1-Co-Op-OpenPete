@@ -2,16 +2,18 @@
 #
 # STATUS: phase A of docs/PORT-INVENTORY.md. A second Spyro whose tick and
 # camera update run every frame alongside player 1's, borrowing player 1's
-# input. He is not drawn yet; the readout in the Mods panel, the log, and the
-# swap_view key are how to see him. It also carries the collision guards, the
-# controller 2 probe, and a measurement of when the game polls input.
+# input. An experimental draw tries to show him using the game's own Spyro
+# renderers; the swap_view key trades identities either way. It also carries
+# the collision guards, the controller 2 probe, and a measurement of when the
+# game polls input.
 #
 # uses: `api->override_name` - Spyro's tick, CameraUpdate, two collision routines, PadVSync
 # uses: `api->base` - called twice per frame in the tick and camera overrides, once per player
 # uses: `api->guest_alloc` - one arena for all per-player state, carried by savestates and rewind
 # uses: `api->guest` - swapping state into and out of the game's own globals
+# uses: `api->call` - running the game's model, shadow and flame renderers for player 2
 # uses: `api->binding_down` - the swap_view development key
-# uses: `api->config_bool` - the enable switch
+# uses: `api->config_bool` - the enable and draw switches
 # uses: `api->register_toggle_hook` - stands player 2 down if the mod is disabled mid-level
 # uses: `api->ui_status` / `api->log` - the readout
 
@@ -45,3 +47,11 @@ default = true
 label   = "Player 2"
 group   = "Co-op"
 help    = "Run a second Spyro alongside player 1. Off leaves the game stock."
+
+[[config]]
+key     = "coop.draw"
+type    = "bool"
+default = true
+label   = "Draw player 2"
+group   = "Co-op"
+help    = "Experimental: draw player 2 with the game's own Spyro renderers."

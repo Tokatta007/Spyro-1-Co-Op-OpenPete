@@ -11,6 +11,7 @@ CoopStats                 g_stats;
 
 static uint32_t g_arena_vaddr;  /* a guest address, valid across reloads */
 static int      g_enabled;      /* from config; re-read on every reload */
+static int      g_draw_enabled; /* from config; the visibility experiment */
 
 CoopArena* coop_arena(void) {
     /* Resolved on every use: the host view is not promised to survive a
@@ -18,7 +19,8 @@ CoopArena* coop_arena(void) {
     return (CoopArena*)g_api->guest(g_arena_vaddr);
 }
 
-int coop_enabled(void) { return g_enabled; }
+int coop_enabled(void)      { return g_enabled; }
+int coop_draw_enabled(void) { return g_draw_enabled; }
 
 /* ------------------------------------------------------------------------
  * Readout
@@ -69,6 +71,9 @@ void coop_publish_status(void) {
                      g_stats.handovers, g_stats.teleports);
     g_api->ui_status(g_self, "View swaps %u (press the swap_view key, P by default)",
                      g_stats.view_swaps);
+    g_api->ui_status(g_self, "P2 drawn %u times, flame %u times%s",
+                     g_stats.p2_draws, g_stats.p2_flame_draws,
+                     g_draw_enabled ? "" : " (drawing OFF in settings)");
     g_api->ui_status(g_self, "Gameplay calls: tick %u, camera %u",
                      g_stats.tick_gameplay, g_stats.camera_gameplay);
     g_api->ui_status(g_self, "Other callers: tick %u (last ra 0x%08X), camera %u (last ra 0x%08X)",
@@ -84,7 +89,7 @@ void coop_publish_status(void) {
         g_api->log(g_self, OP_MOD_LOG_INFO,
                    "tick %u: ready=%u P1(%d,%d,%d) P2(%d,%d,%d) apart=%u | "
                    "p2ticks=%u p2cams=%u seeds=%u reseeds=%u deaths=%u handovers=%u "
-                   "teleports=%u swaps=%u | other tick=%u ra=0x%08X other cam=%u ra=0x%08X | "
+                   "teleports=%u swaps=%u draws=%u flames=%u | other tick=%u ra=0x%08X other cam=%u ra=0x%08X | "
                    "guards probe=%u query=%u | padvsync=%u inswap=%u",
                    g_stats.camera_gameplay, A->ready,
                    p1[0], p1[1], p1[2], p2[0], p2[1], p2[2],
@@ -92,6 +97,7 @@ void coop_publish_status(void) {
                    g_stats.p2_ticks, g_stats.p2_cameras, g_stats.seeds,
                    g_stats.level_reseeds, g_stats.deaths, g_stats.handovers,
                    g_stats.teleports, g_stats.view_swaps,
+                   g_stats.p2_draws, g_stats.p2_flame_draws,
                    g_stats.tick_other, g_stats.tick_other_ra,
                    g_stats.camera_other, g_stats.camera_other_ra,
                    g_stats.probe_refusals, g_stats.query_refusals,
@@ -113,7 +119,8 @@ int openpete_mod_entry(const openpete_mod_api_t* api, openpete_mod_t* self) {
     g_api  = api;
     g_self = self;
 
-    g_enabled = api->config_bool(self, "coop.enabled", 1);
+    g_enabled      = api->config_bool(self, "coop.enabled", 1);
+    g_draw_enabled = api->config_bool(self, "coop.draw", 1);
 
     /* One allocation, at entry, every time. The engine replays the
        allocation sequence on reload and hands back the same bytes, so this
@@ -126,8 +133,8 @@ int openpete_mod_entry(const openpete_mod_api_t* api, openpete_mod_t* self) {
         return 1;
     }
 
-    if (coop_players_install() != 0 || coop_gates_install() != 0 ||
-        coop_pad_install() != 0)
+    if (coop_players_install() != 0 || coop_draw_install() != 0 ||
+        coop_gates_install() != 0 || coop_pad_install() != 0)
         return 1;
     api->register_toggle_hook(self, on_toggle);
 

@@ -17,7 +17,7 @@
  *
  * PHASE A LIMITS, deliberate:
  *   - player 2 borrows player 1's input (no second controller yet, B1)
- *   - nothing is drawn for him (no second render pass yet, B3/B4)
+ *   - drawing him is a separate experiment, in coop_draw.c
  *   - no nearest-player enemies, individual respawn, Sparx or body push (B)
  */
 
@@ -107,6 +107,11 @@ static void swap_spyro(CoopArena* A) {
         walk(k_spyro_regions, COUNT(k_spyro_regions), A->spyro, 1);
 }
 
+/* For the draw hook: drawing needs Spyro's state and nothing else. */
+void coop_swap_spyro(void) {
+    swap_spyro(coop_arena());
+}
+
 static void swap_camera(CoopArena* A) {
     if (!A->ready)
         return;
@@ -160,18 +165,6 @@ static void arm_script_focus(void) {
     uint32_t* focus = (uint32_t*)g_api->guest(OP_GADDR_g_Spyro + SPYRO_OFF_SCRIPT_FOCUS);
     if (*focus == 0)
         *focus = OP_GADDR_g_Spyro + SPYRO_OFF_POSITION;  /* a GUEST address */
-}
-
-/* Registers an override relies on across two base() calls. The CPUState
-   reference: expect a0..a3, v0, v1 and ra to have changed across base(). */
-typedef struct { uint32_t a0, a1, a2, a3, v0, v1, ra; } SavedRegs;
-static void save_regs(const CPUState* c, SavedRegs* s) {
-    s->a0 = c->a0; s->a1 = c->a1; s->a2 = c->a2; s->a3 = c->a3;
-    s->v0 = c->v0; s->v1 = c->v1; s->ra = c->ra;
-}
-static void load_regs(CPUState* c, const SavedRegs* s) {
-    c->a0 = s->a0; c->a1 = s->a1; c->a2 = s->a2; c->a3 = s->a3;
-    c->v0 = s->v0; c->v1 = s->v1; c->ra = s->ra;
 }
 
 /* ------------------------------------------------------------------------
