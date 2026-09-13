@@ -68,13 +68,13 @@ void coop_mobys_track(void) {
     if (g_hooked_n == sizeof g_hooked / sizeof g_hooked[0])
         return;
     if (g_api->override_addr(g_self, fn, on_moby_update) != 0) {
-        g_api->log(g_self, OP_MOD_LOG_ERROR, "could not override moby update at 0x%08X", fn);
+        coop_log(OP_MOD_LOG_ERROR, "could not override moby update at 0x%08X", fn);
         g_hooked[g_hooked_n++] = fn;  /* do not retry every frame */
         return;
     }
     g_hooked[g_hooked_n++] = fn;
     g_stats.moby_fns_hooked = g_hooked_n;
-    g_api->log(g_self, OP_MOD_LOG_INFO, "moby update hooked at 0x%08X (level %d)",
+    coop_log(OP_MOD_LOG_INFO, "moby update hooked at 0x%08X (level %d)",
                fn, coop_level_id());
 }
 
@@ -167,7 +167,7 @@ static void p2_sparx_keep(CPUState* cpu, CoopMobyArena* M) {
         if (M->sparx_spawns_level >= SPARX_SPAWN_CAP_PER_LEVEL) {
             if (M->sparx_spawns_level == SPARX_SPAWN_CAP_PER_LEVEL) {
                 M->sparx_spawns_level++;     /* log once */
-                g_api->log(g_self, OP_MOD_LOG_WARN,
+                coop_log(OP_MOD_LOG_WARN,
                            "player 2's Sparx spawn cap reached in level %d; not respawning",
                            coop_level_id());
             }
@@ -183,7 +183,7 @@ static void p2_sparx_keep(CPUState* cpu, CoopMobyArena* M) {
         if (M->p2_sparx != 0) {
             M->sparx_spawns_level++;
             g_stats.sparx_spawns++;
-            g_api->log(g_self, OP_MOD_LOG_INFO, "player 2's Sparx spawned at 0x%08X",
+            coop_log(OP_MOD_LOG_INFO, "player 2's Sparx spawned at 0x%08X",
                        M->p2_sparx);
         }
     }

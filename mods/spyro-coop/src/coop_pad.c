@@ -32,7 +32,7 @@ void coop_pad_sample(void) {
         g_p2_seen_input++;
         if (!g_p2_ever) {
             g_p2_ever = 1;
-            g_api->log(g_self, OP_MOD_LOG_INFO,
+            coop_log(OP_MOD_LOG_INFO,
                        "controller 2 buffer is LIVE: buttons=0x%04X",
                        PAD_BUTTONS(p2));
         }
@@ -41,10 +41,10 @@ void coop_pad_sample(void) {
 
 void coop_pad_status(void) {
     const uint8_t* p2 = guest8(OP_GADDR_g_PadBufferSecondController);
-    g_api->ui_status(g_self, "Controller 2 buffer: %s, input seen %u times",
+    coop_status("Controller 2 buffer: %s, input seen %u times",
                      (p2 && PAD_CONNECTED(p2)) ? "connected" : "empty",
                      g_p2_seen_input);
-    g_api->ui_status(g_self, "PadVSync calls %u, inside swap window %u",
+    coop_status("PadVSync calls %u, inside swap window %u",
                      g_stats.padvsync_calls, g_stats.padvsync_in_swap);
 }
 
@@ -53,7 +53,7 @@ static void on_pad_vsync(CPUState* cpu) {
     if (coop_arena()->swapped) {
         g_stats.padvsync_in_swap++;
         if (g_stats.padvsync_in_swap == 1)
-            g_api->log(g_self, OP_MOD_LOG_WARN,
+            coop_log(OP_MOD_LOG_WARN,
                        "PadVSync ran inside the player 2 swap window; "
                        "phase C will need the deferred poll");
     }
@@ -62,7 +62,7 @@ static void on_pad_vsync(CPUState* cpu) {
 
 int coop_pad_install(void) {
     if (g_api->override_name(g_self, "PadVSync", on_pad_vsync) != 0) {
-        g_api->log(g_self, OP_MOD_LOG_ERROR, "could not observe PadVSync");
+        coop_log(OP_MOD_LOG_ERROR, "could not observe PadVSync");
         return 1;
     }
     return 0;

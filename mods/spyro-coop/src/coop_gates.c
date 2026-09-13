@@ -67,7 +67,7 @@ static void on_sphere_query(CPUState* cpu) {
 int coop_gates_install(void) {
     if (g_api->override_name(g_self, "func_8004AE38", on_segment_probe) != 0 ||
         g_api->override_name(g_self, "func_8004BE4C", on_sphere_query) != 0) {
-        g_api->log(g_self, OP_MOD_LOG_ERROR, "could not install collision guards");
+        coop_log(OP_MOD_LOG_ERROR, "could not install collision guards");
         return 1;
     }
     return 0;

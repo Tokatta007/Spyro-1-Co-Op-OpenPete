@@ -69,7 +69,7 @@ static void on_glows_and_sparkles(CPUState* cpu) {
 
 int coop_draw_install(void) {
     if (g_api->override_name(g_self, "func_80058BA8", on_glows_and_sparkles) != 0) {
-        g_api->log(g_self, OP_MOD_LOG_ERROR, "could not install the player 2 draw");
+        coop_log(OP_MOD_LOG_ERROR, "could not install the player 2 draw");
         return 1;
     }
     return 0;

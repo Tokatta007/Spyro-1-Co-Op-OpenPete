@@ -157,6 +157,17 @@ static inline void load_regs(CPUState* c, const SavedRegs* s) {
     c->v0 = s->v0; c->v1 = s->v1; c->ra = s->ra;
 }
 
+/* Printing. ALWAYS use these, never g_api->ui_status or g_api->log directly.
+   The API's print functions are reached through function pointers, which the
+   compiler cannot check against their format strings. A mismatched argument
+   list crashed OpenPete at startup on 2026-09-12: a counter was passed where
+   the format said %s, and the engine read it as a string address. These carry
+   the printf format attribute, so -Wformat now catches that at compile time. */
+__attribute__((format(printf, 1, 2)))
+void coop_status(const char* fmt, ...);
+__attribute__((format(printf, 2, 3)))
+void coop_log(int level, const char* fmt, ...);
+
 /* Integer square root, for distances without floating point. */
 static inline uint32_t isqrt64(uint64_t v) {
     uint64_t r = 0, bit = 1ull << 62;

@@ -216,7 +216,7 @@ static void seed_player2(CoopArena* A) {
     swap_spyro(A);
 
     g_stats.seeds++;
-    g_api->log(g_self, OP_MOD_LOG_INFO,
+    coop_log(OP_MOD_LOG_INFO,
                "player 2 seeded in level %d at offset (%d, %d)",
                A->last_level, off[0], off[1]);
 }
@@ -507,18 +507,18 @@ int coop_players_install(void) {
     /* A wrong table size would swap the wrong memory silently. Fail loudly. */
     if (table_bytes(k_spyro_regions, COUNT(k_spyro_regions)) != SPYRO_STATE_BYTES ||
         table_bytes(k_pad_regions, COUNT(k_pad_regions)) != PAD_STATE_BYTES) {
-        g_api->log(g_self, OP_MOD_LOG_ERROR,
+        coop_log(OP_MOD_LOG_ERROR,
                    "swap table size mismatch: spyro %u, pad %u",
                    table_bytes(k_spyro_regions, COUNT(k_spyro_regions)),
                    table_bytes(k_pad_regions, COUNT(k_pad_regions)));
         return 1;
     }
     if (g_api->override_name(g_self, "func_8004A200", on_spyro_tick) != 0) {
-        g_api->log(g_self, OP_MOD_LOG_ERROR, "could not override Spyro's tick");
+        coop_log(OP_MOD_LOG_ERROR, "could not override Spyro's tick");
         return 1;
     }
     if (g_api->override_name(g_self, "CameraUpdate", on_camera_update) != 0) {
-        g_api->log(g_self, OP_MOD_LOG_ERROR, "could not override CameraUpdate");
+        coop_log(OP_MOD_LOG_ERROR, "could not override CameraUpdate");
         return 1;
     }
     return 0;

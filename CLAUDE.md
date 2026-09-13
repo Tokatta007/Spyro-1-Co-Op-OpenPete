@@ -61,7 +61,26 @@ folder beside the executable. The loop is: edit, relaunch OpenPete, read
 `D:\Games\OpenPete\logs\openpete.log`. A start with mods to compile shows
 "COMPILING MODS" on the splash. A compile error appears in that log.
 
-The mod also publishes live status into the Mods panel: Escape, then Mods.
+The mod's settings and live readout are in the **M** config overlay, under Mods.
+(Escape opens the game's settings menu, which does not show mods.)
+
+**Test a build without the user relaunching:**
+
+```powershell
+& "D:\Games\OpenPete\openpete-spyro1.exe" --headless --frame-limit 600
+```
+
+It compiles the mod, boots, runs 600 frames and exits, writing the usual log.
+It only reaches the title screen, so it proves the mod loads and does not crash
+at startup; it does not exercise gameplay. **It rotates the log**, so read the
+user's session log before running it.
+
+**Print only through `coop_status()` and `coop_log()`**, never
+`g_api->ui_status` / `g_api->log` directly. The API's functions are pointers
+the compiler cannot check against a format string. On 2026-09-12 a mis-aimed
+scripted edit put five extra arguments into the wrong call, a counter landed on
+a `%s`, and OpenPete crashed at startup. The wrappers carry the printf format
+attribute, so `-Wformat` flags that now; it was verified to.
 
 ## The move from macOS, 2026-09-11: what it cost
 

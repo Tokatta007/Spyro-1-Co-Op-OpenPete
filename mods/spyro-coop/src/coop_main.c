@@ -4,6 +4,8 @@
  */
 
 #include "coop.h"
+#include <stdarg.h>
+#include <stdio.h>
 
 const openpete_mod_api_t* g_api;
 openpete_mod_t*           g_self;
@@ -18,6 +20,24 @@ CoopArena* coop_arena(void) {
     /* Resolved on every use: the host view is not promised to survive a
        process handoff, and the guest address is. */
     return (CoopArena*)g_api->guest(g_arena_vaddr);
+}
+
+void coop_status(const char* fmt, ...) {
+    char buf[256];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof buf, fmt, ap);
+    va_end(ap);
+    g_api->ui_status(g_self, "%s", buf);
+}
+
+void coop_log(int level, const char* fmt, ...) {
+    char buf[1024];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof buf, fmt, ap);
+    va_end(ap);
+    g_api->log(g_self, level, "%s", buf);
 }
 
 CoopMobyArena* coop_moby_arena(void) {
@@ -45,48 +65,46 @@ void coop_publish_status(void) {
     coop_p2_position(p2);
 
     if (!g_enabled)
-        g_api->ui_status(g_self, "Player 2: OFF (enable it in this mod's settings)");
+        coop_status("Player 2: OFF (enable it in this mod's settings)");
     else if (A->ready)
-        g_api->ui_status(g_self, "Player 2: active in level %d%s",
+        coop_status("Player 2: active in level %d%s",
                          A->last_level, A->handover ? ", handover pending" : "");
     else
-        g_api->ui_status(g_self, "Player 2: waiting for gameplay");
+        coop_status("Player 2: waiting for gameplay");
 
-    g_api->ui_status(g_self, "P1 at %d, %d, %d", p1[0], p1[1], p1[2]);
+    coop_status("P1 at %d, %d, %d", p1[0], p1[1], p1[2]);
     if (A->ready) {
-        g_api->ui_status(g_self, "P2 at %d, %d, %d", p2[0], p2[1], p2[2]);
-        g_api->ui_status(g_self, "Distance apart: %u (started at %d)",
+        coop_status("P2 at %d, %d, %d", p2[0], p2[1], p2[2]);
+        coop_status("Distance apart: %u (started at %d)",
                          distance_between(p1, p2), P2_START_OFFSET);
     }
-    g_api->ui_status(g_self, "P2 ticks %u, P2 camera updates %u",
+    coop_status("P2 ticks %u, P2 camera updates %u",
                      g_stats.p2_ticks, g_stats.p2_cameras);
-    g_api->ui_status(g_self, "Seeds %u, level reseeds %u, deaths %u, handovers %u, teleports %u",
+    coop_status("Seeds %u, level reseeds %u, deaths %u, handovers %u, teleports %u",
                      g_stats.seeds, g_stats.level_reseeds, g_stats.deaths,
                      g_stats.handovers, g_stats.teleports);
-    g_api->ui_status(g_self, "View swaps %u (press the swap_view key, P by default)",
+    coop_status("View swaps %u (press the swap_view key, P by default)",
                      g_stats.view_swaps);
-    g_api->ui_status(g_self, "P2 drawn %u times, flame %u times%s",
+    coop_status("P2 drawn %u times, flame %u times%s",
                      g_stats.p2_draws, g_stats.p2_flame_draws,
-                   g_stats.moby_two_pass, g_stats.moby_single_pass,
-                   g_stats.moby_fns_hooked, g_stats.sparx_spawns, g_stats.pushes,
                      g_draw_enabled ? "" : " (drawing OFF in settings)");
-    g_api->ui_status(g_self, "Moby passes: two-player %u, single %u; update functions hooked %u",
+    coop_status("Moby passes: two-player %u, single %u; update functions hooked %u",
                      g_stats.moby_two_pass, g_stats.moby_single_pass, g_stats.moby_fns_hooked);
-    g_api->ui_status(g_self, "P2 Sparx spawns %u, body pushes %u",
+    coop_status("P2 Sparx spawns %u, body pushes %u",
                      g_stats.sparx_spawns, g_stats.pushes);
-    g_api->ui_status(g_self, "Gameplay calls: tick %u, camera %u",
+    coop_status("Gameplay calls: tick %u, camera %u",
                      g_stats.tick_gameplay, g_stats.camera_gameplay);
-    g_api->ui_status(g_self, "Other callers: tick %u (last ra 0x%08X), camera %u (last ra 0x%08X)",
+    coop_status("Other callers: tick %u (last ra 0x%08X), camera %u (last ra 0x%08X)",
                      g_stats.tick_other, g_stats.tick_other_ra,
                      g_stats.camera_other, g_stats.camera_other_ra);
-    g_api->ui_status(g_self, "Collision guard refusals: probe %u, query %u",
+    coop_status("Collision guard refusals: probe %u, query %u",
                      g_stats.probe_refusals, g_stats.query_refusals);
     coop_pad_status();
 
     /* A summary in the log every ~10 seconds of gameplay, so a session can be
        read back afterwards without anyone watching the panel. */
     if (g_stats.camera_gameplay == 1u || (g_stats.camera_gameplay % 300u) == 0u) {
-        g_api->log(g_self, OP_MOD_LOG_INFO,
+        coop_log(OP_MOD_LOG_INFO,
                    "tick %u: ready=%u P1(%d,%d,%d) P2(%d,%d,%d) apart=%u | "
                    "p2ticks=%u p2cams=%u seeds=%u reseeds=%u deaths=%u handovers=%u "
                    "teleports=%u swaps=%u draws=%u flames=%u | mobys 2p=%u 1p=%u fns=%u sparx=%u pushes=%u | other tick=%u ra=0x%08X other cam=%u ra=0x%08X | "
@@ -98,6 +116,8 @@ void coop_publish_status(void) {
                    g_stats.level_reseeds, g_stats.deaths, g_stats.handovers,
                    g_stats.teleports, g_stats.view_swaps,
                    g_stats.p2_draws, g_stats.p2_flame_draws,
+                   g_stats.moby_two_pass, g_stats.moby_single_pass,
+                   g_stats.moby_fns_hooked, g_stats.sparx_spawns, g_stats.pushes,
                    g_stats.tick_other, g_stats.tick_other_ra,
                    g_stats.camera_other, g_stats.camera_other_ra,
                    g_stats.probe_refusals, g_stats.query_refusals,
@@ -128,14 +148,14 @@ int openpete_mod_entry(const openpete_mod_api_t* api, openpete_mod_t* self) {
     void* view = NULL;
     g_arena_vaddr = api->guest_alloc(self, sizeof(CoopArena), 4, 0, &view);
     if (g_arena_vaddr == 0) {
-        api->log(self, OP_MOD_LOG_ERROR, "could not allocate %u bytes of arena",
+        coop_log(OP_MOD_LOG_ERROR, "could not allocate %u bytes of arena",
                  (unsigned)sizeof(CoopArena));
         return 1;
     }
     /* Appended, never merged into the block above: see CoopMobyArena. */
     g_moby_vaddr = api->guest_alloc(self, sizeof(CoopMobyArena), 4, 0, &view);
     if (g_moby_vaddr == 0) {
-        api->log(self, OP_MOD_LOG_ERROR, "could not allocate the moby table");
+        coop_log(OP_MOD_LOG_ERROR, "could not allocate the moby table");
         return 1;
     }
 
@@ -145,7 +165,7 @@ int openpete_mod_entry(const openpete_mod_api_t* api, openpete_mod_t* self) {
     api->register_toggle_hook(self, on_toggle);
     coop_mobys_track();
 
-    api->log(self, OP_MOD_LOG_INFO,
+    coop_log(OP_MOD_LOG_INFO,
              "spyro-coop phase A up: arena %u bytes at 0x%08X, player 2 %s",
              (unsigned)sizeof(CoopArena), g_arena_vaddr,
              g_enabled ? "enabled" : "disabled in settings");
