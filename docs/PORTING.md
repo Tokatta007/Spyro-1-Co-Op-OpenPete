@@ -246,7 +246,9 @@ pickup text, speedway counter layout) are documented in the PS1 repository's
    input so it does not wait on B1. **First session 2026-09-12: the engine
    accepted two ticks per frame with no complaint, the game stayed stable, and
    player 2 moved as a genuinely separate body.** That settles B2 in practice.
-   Results in PORT-INVENTORY.md §6.
+   Results in PORT-INVENTORY.md §6. **Player 2 is also visible**, drawn with
+   the game's own Spyro renderers, as long as sub-tick interpolation is off;
+   with it on, the engine drops him from in-between frames. See §7.
 4. Settle **B3**, and if it holds, a first split-screen.
 5. **B4** for four-player.
 

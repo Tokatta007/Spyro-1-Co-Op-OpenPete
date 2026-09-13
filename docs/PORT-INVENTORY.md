@@ -328,12 +328,18 @@ dragon, which a mod cannot supply (`render_path_mark_drawn` is not in the API).
 Smooth visibility at high frame rates therefore needs engine support, and this
 log line is the precise thing to ask about.
 
-### Next tests, no code needed
+### Follow-up tests, same day. All three predictions held.
 
-1. **Render FPS at 30**, matching the sim, so there are no sub-tick frames.
-   Prediction: player 2 visible all the time, and no stutter, since the log
-   ties interpolation capture to render FPS above sim rate.
-2. **Interpolation off** (the interp toggle key). Prediction: the same, if
-   sub-tick presents stop being built.
-3. **Tab with "Draw player 2" off.** Prediction: he disappears, which proves
-   the Tab visibility comes from this draw and nothing else.
+| Test | Prediction | Result |
+| --- | --- | --- |
+| Render FPS 30, matching the sim | player 2 visible, no stutter | **Visible, fine** |
+| Render FPS 100, interpolation toggled off | the same | **Visible, fine** |
+| Fast-forward with "Draw player 2" off | he disappears | **He disappears** |
+
+So the diagnosis is confirmed, not inferred: the draw is correct, and the only
+thing hiding player 2 is sub-tick interpolation, which assembles its frames
+from bookkeeping a second dragon does not get.
+
+**Working setup until the engine supports it:** turn interpolation off once
+per launch (there is no startup setting for it, only the runtime toggle), or
+run at 30 FPS. Both dragons are visible either way.
