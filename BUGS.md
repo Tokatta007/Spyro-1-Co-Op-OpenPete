@@ -39,7 +39,7 @@ cannot be on one screen.
 
 ## 2. Missing, planned
 
-### M5. In-game Multiplayer and Color menus: all 4 stages BUILT (v0.7.0)
+### M5. In-game Multiplayer and Color menus: stages 1 to 3 BUILT; stage 4 blocked on the engine
 
 Decided with the user 2026-09-13. The mod should be fully playable from a couch
 with controllers, so every player-facing setting must be reachable in game.
@@ -77,14 +77,14 @@ with controllers, so every player-facing setting must be reachable in game.
    STRENGTH for P1 to P4, LEFT/RIGHT by one, L2/R2 by 16, SQUARE resets the
    column. Columns for players beyond the PLAYERS setting are grey and
    skipped by the cursor. Settings now keep four colours.
-4. **Built (v0.7.0): spinning dragon previews** above the Colors box, one per
-   column in that player's colour, inactive players as dark silhouettes. They
-   replaced the flat swatches. Possible on OpenPete because the native renderer
-   rebuilds Spyro from each model-renderer call even on the pause screen; on
-   PS1, and in PsyCross, the paused world is a stored picture and nothing
-   draws. Placement, spin field and the colour hook exemption are documented
-   in `coop_menu.c`. Not yet seen: how they behave with frame interpolation
-   on, which drops extra dragons from in-between frames in gameplay (X1).
+4. **Spinning dragon previews: built in v0.7.0, switched off in v0.7.1.**
+   ENGINE SIDE, for the author. In play the native renderer draws the pause
+   screen over a frozen snapshot of the last gameplay frame and draws no 3D
+   model on top, so the user saw none; they appeared only in headless
+   screenshots, which have no snapshot. The code stays in `coop_menu.c`
+   behind `COOP_PREVIEW_DRAGONS`, standing in the neutral pose (animation 0,
+   frame 0) at the user's request, and the colour swatches are back in their
+   row. Ask for: model draws over the pause backdrop.
 
 Checked headless 2026-09-13 with screenshots (`--skip-to-level artisans` and a
 scripted movie): the list with five rows and a grown box, the shimmer on
