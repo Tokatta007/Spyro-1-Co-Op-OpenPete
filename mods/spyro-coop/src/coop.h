@@ -50,6 +50,10 @@ extern openpete_mod_t*           g_self;
 #define SPYRO_OFF_HEALTH       0x164  /* int m_health: 3 green ... 0 no Sparx */
 #define SPYRO_OFF_COLOR_FILTER 0x028  /* r, g, b, interpolation: the game's own
                                          tint, interpolated with vertex colours */
+#define SPYRO_OFF_RESPAWN_BLINK 0x260 /* decomp's unk_0x260, "No XREFS": nothing in
+                                         the game touches it, so the mod keeps a
+                                         respawned dragon's blink ticks here, where
+                                         every swap and savestate carries it */
 
 /* Camera struct offsets, from the decompilation's camera.h (two 20-byte
    SHORTMATRIX fields come first). */
@@ -66,13 +70,14 @@ extern openpete_mod_t*           g_self;
    which reposition the live dragon without rebuilding the level. */
 #define GS_PLAYING 0
 
-/* How far apart the dragons start, and fly in formation, in world units. The
-   PS1 build used 0x280 (640); the world units are the same on OpenPete, which
-   runs the original game logic. At 640 the flying pose's wings overlapped in
-   the portal tunnel and the entrance landing (seen 2026-09-13), so 1024. One
-   value for seeding and every sequence, so the dragons never jump apart when
-   one hands over to the next. Must stay above the body radius (416). */
-#define P2_START_OFFSET 0x400
+/* How far apart the dragons start, and fly in formation, in world units: 640,
+   the PS1 build's spacing. It was 1024 for a while (v0.5.1) to stop the dragons
+   overlapping in the portal tunnel, but that overlap turned out to be the
+   native renderer's (BUGS.md X4) and the wider gap did not help, so the user
+   asked for the PS1 value back (2026-09-13). One value for seeding and every
+   sequence, so the dragons never jump apart when one hands over to the next.
+   Must stay above the body radius (416). */
+#define P2_START_OFFSET 0x280
 
 /* Up to four dragons: slot 0 is the live one, slots 1..3 are shadows. */
 #define COOP_MAX_PLAYERS 4
@@ -281,6 +286,8 @@ void coop_mobys_identities_swapped(int slot);  /* slot traded identities with sl
 
 /* coop_respawn.c */
 int  coop_respawn_install(void);
+void coop_respawn_blink_tick(void);   /* count down the live dragon's blink */
+int  coop_respawn_blink_hidden(void); /* the live dragon is in an "off" blink tick */
 void coop_capture_spawn(void);
 void coop_fairy_mute(int player);
 void coop_sparx_heal(CPUState* cpu);

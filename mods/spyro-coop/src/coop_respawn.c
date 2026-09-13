@@ -46,6 +46,8 @@
 #define HUD_OFF_LIFE_COUNT    0x28
 
 #define RESPAWN_INVULN   90       /* the engine's own i-frame count */
+#define RESPAWN_BLINK    45       /* ticks of blinking in, about 1.5 seconds */
+#define BLINK_PERIOD     3        /* ticks shown, then ticks hidden */
 #define RESPAWN_HEALTH   3
 
 /* Grounding. Both constants are the game's own, and the first PS1 attempt got
@@ -325,6 +327,7 @@ static void on_trigger_respawn(CPUState* cpu) {
     g_api->call(cpu, OP_FNADDR_func_8004AC24);
 
     *guest32(OP_GADDR_g_Spyro + SPYRO_OFF_INVULN) = RESPAWN_INVULN;
+    *guest32(OP_GADDR_g_Spyro + SPYRO_OFF_RESPAWN_BLINK) = RESPAWN_BLINK;
 
     load_regs(cpu, &regs);
     g_stats.individual_respawns++;
@@ -333,6 +336,26 @@ static void on_trigger_respawn(CPUState* cpu) {
              coop_physical_player(dying) + 1, source, pos[0], pos[1], pos[2],
              grounded ? ", grounded" : ", floor not found, height kept", *lives);
     /* No base(): the stock trigger never runs on this path. */
+}
+
+/* ------------------------------------------------------------------------
+ * BLINKING IN (2026-09-13, at the user's request). A dragon who respawns on his
+ * own flickers for RESPAWN_BLINK ticks, so he reads as arriving rather than
+ * popping into place. The countdown lives in his own Spyro struct, so each
+ * dragon blinks on his own, and the draw hook leaves his model out on the
+ * "off" ticks (his shadow stays, which grounds him while he flickers).
+ * ---------------------------------------------------------------------- */
+void coop_respawn_blink_tick(void) {
+    int32_t* blink = guest32(OP_GADDR_g_Spyro + SPYRO_OFF_RESPAWN_BLINK);
+    if (*blink < 0 || *blink > RESPAWN_BLINK)
+        *blink = 0;                          /* never trust a stray value */
+    else if (*blink > 0)
+        (*blink)--;
+}
+
+int coop_respawn_blink_hidden(void) {
+    int32_t blink = *guest32(OP_GADDR_g_Spyro + SPYRO_OFF_RESPAWN_BLINK);
+    return blink > 0 && blink <= RESPAWN_BLINK && ((blink / BLINK_PERIOD) & 1);
 }
 
 int coop_respawn_install(void) {

@@ -39,7 +39,7 @@ cannot be on one screen.
 
 ## 2. Missing, planned
 
-### M6. Three and four players: BUILT (v0.8.0), awaiting play
+### M6. Three and four players: WORKS (confirmed by the user, v0.8.0)
 
 Built 2026-09-13 at the user's request. The mod was written around exactly one
 extra dragon; it now runs up to three shadows (slots 1..3), with a table of
@@ -64,9 +64,14 @@ three times per tick. With four players the draw list outgrew the engine's
 DrawOTag scratch and the overflow corrupted game state within a tick. They are
 now drawn once per tick, and all four stay visible in both renderers.
 
-Checked headless: 2, 3 and 4 players in Artisans for 300+ ticks each, and four
-through the Stone Hill portal and landing. Not yet exercised with four: deaths
-and respawns, handovers (dragons, balloonist), flight levels, the view key.
+Confirmed by the user 2026-09-13: enemies target the nearest dragon, and
+deaths, dragon rescues, the balloonist, the view key and a flight level all
+work with four. The session log had no errors or warnings. In a flight level a
+crash still ends the run for everyone; the user would prefer the crasher sits
+out, but accepts it for now.
+
+v0.8.1: spacing back to the PS1 640 at the user's request, and a respawned
+dragon blinks in for 45 ticks (see M7).
 
 ### M5. In-game Multiplayer and Color menus: stages 1 to 3 BUILT; stage 4 blocked on the engine
 

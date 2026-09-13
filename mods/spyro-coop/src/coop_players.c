@@ -560,6 +560,7 @@ static void on_spyro_tick(CPUState* cpu) {
     g_ticking_player   = 0;
     g_api->base(cpu);                                  /* slot 0 */
     g_in_gameplay_tick = 0;
+    coop_respawn_blink_tick();
 
     int32_t gs = gamestate();
     if (gs == 4 || gs == 5) {
@@ -608,6 +609,7 @@ static void on_spyro_tick(CPUState* cpu) {
         g_api->base(cpu);                              /* shadow k */
         g_in_gameplay_tick = 0;
         g_ticking_player   = 0;
+        coop_respawn_blink_tick();
         g_stats.p2_ticks++;
         *substeps = after_p1;                          /* consumed once */
 

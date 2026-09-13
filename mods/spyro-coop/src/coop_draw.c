@@ -129,7 +129,8 @@ static void draw_player2(CPUState* cpu) {
             g_stats.p2_draws_skipped++;
         } else if (*guest32(OP_GADDR_g_IsSpyroHidden) == 0) {
             apply_tint(k);                               /* before the call, not inside it */
-            g_api->call(cpu, OP_FNADDR_func_80023AC4);   /* model */
+            if (!coop_respawn_blink_hidden())
+                g_api->call(cpu, OP_FNADDR_func_80023AC4);   /* model */
             g_api->call(cpu, OP_FNADDR_func_80059A48);   /* drop shadow */
             g_stats.p2_draws++;
         }
@@ -276,7 +277,8 @@ static void on_spyro_model(CPUState* cpu) {
             g_p2_drawn_this_scene = 1;
             apply_tint(0);                   /* the lead's colour, for his call */
         }
-        g_api->base(cpu);                    /* player 1, last */
+        if (!coop_respawn_blink_hidden())
+            g_api->base(cpu);                /* player 1, last; left out on a blink's off tick */
         return;
     }
 
