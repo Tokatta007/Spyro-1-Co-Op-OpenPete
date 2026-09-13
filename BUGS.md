@@ -157,26 +157,33 @@ can hesitate before attacking again. It does attack eventually, and it is hard
 to reproduce. Likely its pod changing owner as the two distances cross the
 switch margin. Accepted by the user as not worth chasing for now.
 
-### X4. Dragons overlapping on the portal transition screen: v0.5.6
+### X4. Dragons overlap on the portal transition screen: PARKED, ENGINE SIDE, for the author
 
 Screenshots 2026-09-13 on "Entering Stone Hill", then reproduced headless from a
 savestate at the portal (see "Headless screenshots" in `CLAUDE.md`).
 
 The camera starts facing the pair, then swings to a side view and stays there.
 Logged in that pose: camera to lead (+2695, +58, +818), lead to wingman
-(+1024, 0, 0). The wing line points straight down the view, so the wingman is
-directly behind the lead, smaller and hidden.
+(+1024, 0, 0), so the wingman is directly behind the lead.
 
-| Version | Wingman placed | Result |
+**The cause is the native renderer.** On the same frame, PsyCross (the reference
+renderer) follows draw order as a PS1 does: with the wingman drawn first the
+nearer dragon correctly covers him, and with the lead first the far dragon
+paints over. The native renderer draws parts of the far dragon over the near
+one in both orders. Draw order was the PS1 fix; on OpenPete a mod cannot reach
+the native renderer's choice.
+
+| Version | Tried | Result |
 | --- | --- | --- |
-| PS1, v0.5.2 | along Spyro's wing line | the look the user wants, but overlaps side-on |
-| v0.5.3 | square to the camera's view | nose to tail side-on; worse |
-| v0.5.4 | behind, out along the wing line, and lower | one big dragon and one small; worse |
-| v0.5.5 | wing line, farther dragon drawn first | overlap unchanged, and both dragons took the wingman's colour |
-| **v0.5.6** | **wing line, dropping up to 500 as the wing line turns toward the camera** | clear in every screenshot; awaiting the user |
+| PS1, v0.5.2 | wing line, level | the look the user wants; overlaps side-on |
+| v0.5.3 | square to the camera's view | nose to tail side-on; rejected |
+| v0.5.4 | behind, out along the wing line, and lower | one big dragon and one small; rejected |
+| v0.5.5 | lead drawn first | no change in the native renderer, and both dragons took one colour |
+| v0.5.6 | dropping below the lead as the camera swings side-on | clear, but looked wrong at the landing; rejected, user wants one level plane |
+| **v0.5.7** | **back to the wing line, level** | parked |
 
-Draw order was not the cause on OpenPete. Lead-first draws also break colour, so
-the wingman is always drawn first.
+For the author note: two Spyro model draws in one frame are not depth-ordered
+by the native renderer the way PsyCross orders them.
 
 ### X2. Player 2 copies player 1's controls
 

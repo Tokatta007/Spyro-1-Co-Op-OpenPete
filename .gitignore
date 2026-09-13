@@ -30,3 +30,6 @@ docs/private/
 
 # The player's saved settings (coop_settings.c). Personal, not source.
 mods/spyro-coop/data/
+
+# Headless screenshots for comparing looks. Contain game imagery, never commit.
+shots/
