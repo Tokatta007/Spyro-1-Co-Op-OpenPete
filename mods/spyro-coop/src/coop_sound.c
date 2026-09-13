@@ -1,6 +1,6 @@
 /**
  * @file coop_sound.c
- * @brief Sounds are as loud as they are near EITHER dragon. Ported from
+ * @brief Sounds are as loud as they are near ANY dragon. Ported from
  *        Sp1x2SoundListenerDistance.
  *
  * TickActiveSoundVoices measures each 3D voice's distance for its range kill
@@ -29,8 +29,8 @@
 #define RA_SOUND_DISTANCE 0x80056530u  /* jal VecMagnitude at 0x80056528 */
 
 static void on_vec_magnitude(CPUState* cpu) {
-    CoopArena* A = coop_arena();
-    if (cpu->ra != RA_SOUND_DISTANCE || !coop_enabled() || !A->ready) {
+    int n = coop_seeded_shadows();
+    if (cpu->ra != RA_SOUND_DISTANCE || !coop_enabled() || n == 0) {
         g_api->base(cpu);
         return;
     }
@@ -47,22 +47,25 @@ static void on_vec_magnitude(CPUState* cpu) {
         return;
     }
 
-    const int32_t* live_cam  = guest32(OP_GADDR_g_Camera + CAMERA_OFF_POSITION);
-    const int32_t* other_cam = (const int32_t*)(A->camera + CAMERA_OFF_POSITION);
-
+    const int32_t* live_cam = guest32(OP_GADDR_g_Camera + CAMERA_OFF_POSITION);
     int32_t saved[3] = { diff[0], diff[1], diff[2] };
-    for (int i = 0; i < 3; i++)
-        diff[i] = saved[i] + live_cam[i] - other_cam[i];  /* source - other camera */
+    uint32_t nearest = d_live;
 
-    load_regs(cpu, &regs);
-    g_api->base(cpu);                        /* from the other camera */
-    uint32_t d_other = cpu->v0;
+    for (int k = 1; k <= n; k++) {
+        const int32_t* other_cam = (const int32_t*)(coop_shadow(k).camera + CAMERA_OFF_POSITION);
+        for (int i = 0; i < 3; i++)
+            diff[i] = saved[i] + live_cam[i] - other_cam[i];  /* source - his camera */
+        load_regs(cpu, &regs);
+        g_api->base(cpu);                    /* from shadow k's camera */
+        if (cpu->v0 < nearest)
+            nearest = cpu->v0;
+    }
 
     diff[0] = saved[0]; diff[1] = saved[1]; diff[2] = saved[2];
 
     load_regs(cpu, &regs);
-    cpu->v0 = (d_other < d_live) ? d_other : d_live;
-    if (d_other < d_live)
+    cpu->v0 = nearest;
+    if (nearest < d_live)
         g_stats.sounds_nearer_p2++;
 }
 

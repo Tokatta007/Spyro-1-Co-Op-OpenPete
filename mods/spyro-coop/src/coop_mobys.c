@@ -50,7 +50,11 @@
  *   - Flight levels run the megafunction ONCE. Their level code does global
  *     work (timer, chests, flight state) that ran twice per frame otherwise.
  *   - If a pass starts a sequence (dragon, portal, balloonist), stop, and for
- *     player 2 leave his state live so the sequence has its player.
+ *     a shadow leave his state live so the sequence has its player.
+ *
+ * FOUR PLAYERS (2026-09-13): the owner is a slot, 0..3; every moby goes to the
+ * nearest dragon with the same hysteresis, and each shadow gets his own
+ * filtered pass after slot 0's.
  */
 
 #include "coop.h"
@@ -61,7 +65,7 @@
 /* The PS1 build went through versions that spawned a new dragonfly on every
    death, and one that orphaned them. If a spawned fly keeps dying at once for
    a reason nobody has found yet, this stops it filling the level. */
-#define SPARX_SPAWN_CAP_PER_LEVEL 4
+#define SPARX_SPAWN_CAP_PER_LEVEL 12   /* 4 per extra dragon */
 
 /* ------------------------------------------------------------------------
  * Ownership
@@ -77,32 +81,42 @@ static int64_t manhattan(const int32_t* a, const Vector3D* b) {
 #define POD_COUNT 32                 /* func_80051FEC keeps 32 pod flags */
 #define POD_NONE(pod) ((pod) >= 0x80)  /* the builder tests the byte signed */
 
-/* One owner decision with hysteresis. prev 0 or 1 is sticky: switch only when
-   the other dragon is closer by the configured margin. Anything else (3 for a
-   fresh level, 2 for a revived dead slot) takes plain nearest. */
-static uint8_t decide_owner(uint8_t prev, int64_t d1, int64_t d2, int64_t keep) {
-    if (prev == 0) return (d2 * 100 < d1 * keep) ? 1 : 0;
-    if (prev == 1) return (d1 * 100 < d2 * keep) ? 0 : 1;
-    return (d2 < d1) ? 1 : 0;
+/* One owner decision with hysteresis, over the n+1 dragons. A previous owner
+   that is still a dragon is sticky: it changes only when the nearest other
+   dragon is closer by the configured margin. Anything else (OWNER_NEW for a
+   fresh level, OWNER_DEAD for a revived dead slot) takes plain nearest. With
+   two dragons this is exactly the PS1 rule. */
+static uint8_t decide_owner(uint8_t prev, const int64_t d[], int n, int64_t keep) {
+    int best = 0;
+    for (int s = 1; s <= n; s++)
+        if (d[s] < d[best]) best = s;
+    if (prev <= (uint8_t)n && best != prev)
+        return (d[best] * 100 < d[prev] * keep) ? (uint8_t)best : prev;
+    return (uint8_t)best;
 }
 
-static unsigned assign_mobys(CoopMobyArena* M, CoopArena* A,
-                             Moby* mobys, uint32_t mobys_vaddr) {
-    const int32_t* p1 = guest32(OP_GADDR_g_Spyro + SPYRO_OFF_POSITION);
-    const int32_t* p2 = (const int32_t*)(A->spyro + SPYRO_OFF_POSITION);
-    uint32_t sparx1 = *(uint32_t*)g_api->guest(OP_GADDR_g_Sparx);
+static unsigned assign_mobys(CoopMobyArena* M, Moby* mobys, uint32_t mobys_vaddr) {
+    int ns = coop_seeded_shadows();
+    const int32_t* pos[COOP_MAX_PLAYERS];
+    uint32_t sparx_of[COOP_MAX_PLAYERS];
+    pos[0] = guest32(OP_GADDR_g_Spyro + SPYRO_OFF_POSITION);
+    sparx_of[0] = *(uint32_t*)g_api->guest(OP_GADDR_g_Sparx);
+    for (int k = 1; k <= ns; k++) {
+        CoopShadowView v = coop_shadow(k);
+        pos[k] = (const int32_t*)(v.spyro + SPYRO_OFF_POSITION);
+        sparx_of[k] = *v.sparx;
+    }
     unsigned n;
 
     /* A new level gets a fresh table, so every moby starts with its truly
-       nearest dragon instead of inheriting player 1 (BUGS.md A3). 3 means
-       "unassigned" and falls through to plain nearest. */
+       nearest dragon instead of inheriting player 1 (BUGS.md A3). */
     CoopExtraArena* X = coop_extra_arena();
     if (X->owner_level != coop_level_id()) {
-        memset(M->owner, 3, sizeof M->owner);
+        memset(M->owner, OWNER_NEW, sizeof M->owner);
         X->owner_level = coop_level_id();
     }
 
-    /* Switch owner only when the other dragon is this much closer. 25 is the
+    /* Switch owner only when another dragon is this much closer. 25 is the
        PS1 value. Lower makes enemies change target more readily, and flips
        ownership more often, which PS1 found harmful mid-reaction (BUGS.md A2). */
     int64_t keep = 100 - coop_hysteresis_percent();
@@ -162,20 +176,21 @@ static unsigned assign_mobys(CoopMobyArena* M, CoopArena* A,
     }
 
     /* ---- each group's nearest member to each dragon ---- */
-    int64_t  pod_d1[POD_COUNT], pod_d2[POD_COUNT];
-    int      pod_first[POD_COUNT];
+    int64_t pod_d[POD_COUNT][COOP_MAX_PLAYERS];
+    int     pod_first[POD_COUNT];
     for (int p = 0; p < POD_COUNT; p++) {
-        pod_d1[p] = pod_d2[p] = INT64_MAX;
+        for (int s = 0; s < COOP_MAX_PLAYERS; s++)
+            pod_d[p][s] = INT64_MAX;
         pod_first[p] = -1;
     }
     for (unsigned i = 0; i < n; i++) {
         if (pod_of[i] < 0)
             continue;
         int p = pod_of[i];
-        int64_t d1 = manhattan(p1, &mobys[i].m_Position);
-        int64_t d2 = manhattan(p2, &mobys[i].m_Position);
-        if (d1 < pod_d1[p]) pod_d1[p] = d1;
-        if (d2 < pod_d2[p]) pod_d2[p] = d2;
+        for (int s = 0; s <= ns; s++) {
+            int64_t d = manhattan(pos[s], &mobys[i].m_Position);
+            if (d < pod_d[p][s]) pod_d[p][s] = d;
+        }
         if (pod_first[p] < 0) pod_first[p] = (int)i;
     }
 
@@ -186,7 +201,7 @@ static unsigned assign_mobys(CoopMobyArena* M, CoopArena* A,
     for (int p = 0; p < POD_COUNT; p++) {
         if (pod_first[p] < 0)
             continue;
-        pod_owner[p] = decide_owner(M->owner[pod_first[p]], pod_d1[p], pod_d2[p], keep);
+        pod_owner[p] = decide_owner(M->owner[pod_first[p]], pod_d[p], ns, keep);
     }
 
     /* ---- assign every moby ---- */
@@ -194,7 +209,7 @@ static unsigned assign_mobys(CoopMobyArena* M, CoopArena* A,
     for (unsigned i = 0; i < n; i++) {
         int8_t state = (int8_t)mobys[i].m_State;
         if (state < 0) {
-            M->owner[i] = 2;                 /* dead slot: never masked */
+            M->owner[i] = OWNER_DEAD;        /* dead slot: never filtered */
             continue;
         }
         uint8_t prev = M->owner[i];
@@ -202,19 +217,24 @@ static unsigned assign_mobys(CoopMobyArena* M, CoopArena* A,
 
         if (pod_of[i] >= 0) {
             /* The group's owner wins, even for a Sparx: the builder would pull
-               a split group into both passes whatever we decide per moby. */
+               a split group into several passes whatever we decide per moby. */
             M->owner[i] = pod_owner[pod_of[i]];
             pod_members++;
-        } else if (addr == sparx1) {
-            M->owner[i] = 0;
-        } else if (M->p2_sparx != 0 && addr == M->p2_sparx) {
-            M->owner[i] = 1;
         } else {
-            M->owner[i] = decide_owner(prev,
-                                       manhattan(p1, &mobys[i].m_Position),
-                                       manhattan(p2, &mobys[i].m_Position), keep);
+            int follows = -1;                /* a dragon's own Sparx stays his */
+            for (int s = 0; s <= ns; s++)
+                if (sparx_of[s] != 0 && addr == sparx_of[s])
+                    follows = s;
+            if (follows >= 0) {
+                M->owner[i] = (uint8_t)follows;
+            } else {
+                int64_t d[COOP_MAX_PLAYERS];
+                for (int s = 0; s <= ns; s++)
+                    d[s] = manhattan(pos[s], &mobys[i].m_Position);
+                M->owner[i] = decide_owner(prev, d, ns, keep);
+            }
         }
-        if (prev <= 1 && M->owner[i] != prev)
+        if (prev < COOP_MAX_PLAYERS && M->owner[i] != prev)
             g_stats.owner_flips++;
     }
     g_stats.pod_members = pod_members;
@@ -222,36 +242,40 @@ static unsigned assign_mobys(CoopMobyArena* M, CoopArena* A,
 }
 
 /* ------------------------------------------------------------------------
- * Player 2's Sparx: Spyromain's sp2x2_rayz, ported via Sp1x2P2SparxKeep.
+ * The extra dragons' Sparx: Spyromain's sp2x2_rayz, ported via
+ * Sp1x2P2SparxKeep, now kept per shadow slot.
  *
  * v4 of the PS1 bookkeeping, after three versions that orphaned or
  * duplicated dragonflies. Only a change to a DIFFERENT LIVING g_Sparx is a
- * level rebuild; a null is a death transient, and player 2's fly is fine.
- * Called with player 2 live, so the spawn reads his Spyro if it reads one.
+ * level rebuild, and it forgets every shadow's fly; a null is a death
+ * transient, and theirs are fine. Called with that shadow live, so the spawn
+ * reads his Spyro if it reads one.
  * ---------------------------------------------------------------------- */
-static void p2_sparx_keep(CPUState* cpu, CoopMobyArena* M) {
+static void shadow_sparx_keep(CPUState* cpu, CoopMobyArena* M, int slot) {
     uint32_t sparx1 = *(uint32_t*)g_api->guest(OP_GADDR_g_Sparx);
+    uint32_t* mine = coop_shadow(slot).sparx;
 
     if (sparx1 != 0 && sparx1 != M->sparx1_seen) {
         M->sparx1_seen = sparx1;             /* real rebuild: old world gone */
-        M->p2_sparx = 0;
+        for (int k = 1; k <= COOP_MAX_SHADOWS; k++)
+            *coop_shadow(k).sparx = 0;
         M->sparx_spawns_level = 0;
     }
-    if (M->p2_sparx != 0) {
-        Moby* fly = (Moby*)g_api->guest(M->p2_sparx);
-        if (!fly || M->p2_sparx == sparx1 || (int8_t)fly->m_State < 0)
-            M->p2_sparx = 0;                 /* his fly died, or was reused */
+    if (*mine != 0) {
+        Moby* fly = (Moby*)g_api->guest(*mine);
+        if (!fly || *mine == sparx1 || (int8_t)fly->m_State < 0)
+            *mine = 0;                       /* his fly died, or was reused */
     }
     /* g_Sparx == 0 means this level has no Sparx at all; follow suit. And a
        dragon with no health has no Sparx in retail: respawning one would only
        lose it again, and burn the spawn cap doing so. */
-    if (M->p2_sparx == 0 && sparx1 != 0 &&
+    if (*mine == 0 && sparx1 != 0 &&
         *guest32(OP_GADDR_g_Spyro + SPYRO_OFF_HEALTH) > 0) {
         if (M->sparx_spawns_level >= SPARX_SPAWN_CAP_PER_LEVEL) {
             if (M->sparx_spawns_level == SPARX_SPAWN_CAP_PER_LEVEL) {
                 M->sparx_spawns_level++;     /* log once */
                 coop_log(OP_MOD_LOG_WARN,
-                           "player 2's Sparx spawn cap reached in level %d; not respawning",
+                           "extra dragons' Sparx spawn cap reached in level %d; not respawning",
                            coop_level_id());
             }
             return;
@@ -262,12 +286,11 @@ static void p2_sparx_keep(CPUState* cpu, CoopMobyArena* M) {
         cpu->a0 = SPARX_CLASS;
         cpu->a1 = 0;
         g_api->call(cpu, spawn);             /* the level's own moby factory */
-        M->p2_sparx = cpu->v0;               /* a guest Moby*, or 0 on failure */
-        if (M->p2_sparx != 0) {
+        *mine = cpu->v0;                     /* a guest Moby*, or 0 on failure */
+        if (*mine != 0) {
             M->sparx_spawns_level++;
             g_stats.sparx_spawns++;
-            coop_log(OP_MOD_LOG_INFO, "player 2's Sparx spawned at 0x%08X",
-                       M->p2_sparx);
+            coop_log(OP_MOD_LOG_INFO, "slot %d's Sparx spawned at 0x%08X", slot, *mine);
         }
     }
 }
@@ -281,18 +304,20 @@ static void p2_sparx_keep(CPUState* cpu, CoopMobyArena* M) {
  * moby keeps its dragon, trade the two Sparx so each keeps following his, and
  * move the save-fairy mute with the dragon it belongs to.
  * ---------------------------------------------------------------------- */
-void coop_mobys_identities_swapped(void) {
+void coop_mobys_identities_swapped(int slot) {
     CoopMobyArena* M = coop_moby_arena();
+    uint8_t other = (uint8_t)slot;
     for (unsigned i = 0; i < MOBY_MAX; i++) {
-        if (M->owner[i] == 0)      M->owner[i] = 1;
-        else if (M->owner[i] == 1) M->owner[i] = 0;
+        if (M->owner[i] == 0)          M->owner[i] = other;
+        else if (M->owner[i] == other) M->owner[i] = 0;
     }
 
     uint32_t* g_sparx = (uint32_t*)g_api->guest(OP_GADDR_g_Sparx);
-    if (*g_sparx != 0 && M->p2_sparx != 0) {
+    uint32_t* theirs  = coop_shadow(slot).sparx;
+    if (*g_sparx != 0 && *theirs != 0) {
         uint32_t t = *g_sparx;
-        *g_sparx = M->p2_sparx;
-        M->p2_sparx = t;
+        *g_sparx = *theirs;
+        *theirs = t;
         /* The new g_Sparx is not a level rebuild; tell the detector so. */
         M->sparx1_seen = *g_sparx;
     }
@@ -300,8 +325,8 @@ void coop_mobys_identities_swapped(void) {
     /* The save-fairy mute names a slot too. Seen 2026-09-13: pressing the key
        while standing on the pedestal let the fairy talk at once. */
     CoopRespawnArena* R = coop_respawn_arena();
-    if (R->fairy_mute[0] == 1)      R->fairy_mute[0] = 2;
-    else if (R->fairy_mute[0] == 2) R->fairy_mute[0] = 1;
+    if (R->fairy_mute[0] == 1)             R->fairy_mute[0] = slot + 1;
+    else if (R->fairy_mute[0] == slot + 1) R->fairy_mute[0] = 1;
 }
 
 /* ------------------------------------------------------------------------
@@ -311,7 +336,7 @@ void coop_mobys_identities_swapped(void) {
 #define LIST_BUFFER   (OP_GADDR_D_8006FCF4 + 0x400)  /* func_80051FEC's output */
 #define LIST_MAX      1024                            /* stop somewhere if unterminated */
 
-/* Which player's entries survive the next list build: -1 none, 0 or 1. Armed
+/* Which slot's entries survive the next list build: -1 none, else 0..3. Armed
    immediately before a megafunction runs and consumed by the one builder call
    it makes first, so it never outlives the pass it was armed for. */
 static int      g_filter_owner = -1;
@@ -343,7 +368,7 @@ static void on_list_builder(CPUState* cpu) {
                since, or outside the array, is left alone. */
             if (idx < g_assigned_n && (moby - mobys_vaddr) % sizeof(Moby) == 0) {
                 uint8_t owner = M->owner[idx];
-                drop = (owner <= 1 && owner != (uint8_t)keep_owner);
+                drop = (owner < COOP_MAX_PLAYERS && owner != (uint8_t)keep_owner);
             }
         }
         if (drop)
@@ -355,7 +380,8 @@ static void on_list_builder(CPUState* cpu) {
 }
 
 static int two_pass_allowed(CoopArena* A) {
-    return coop_enabled() && A->ready && coop_gamestate() == GS_PLAYING &&
+    return coop_enabled() && A->ready && coop_seeded_shadows() > 0 &&
+           coop_gamestate() == GS_PLAYING &&
            *(uint32_t*)g_api->guest(OP_GADDR_g_LevelMobys) != 0 &&
            *guest32(OP_GADDR_g_IsFlightLevel) == 0 &&
            A->last_level == coop_level_id();
@@ -388,93 +414,100 @@ static void on_env_update(CPUState* cpu) {
 
     coop_sparx_heal(cpu);                    /* after his own respawn */
     load_regs(cpu, &regs);
-    g_assigned_n = assign_mobys(M, A, mobys, mobys_vaddr);
+    g_assigned_n = assign_mobys(M, mobys, mobys_vaddr);
     coop_fairy_mute(0);
 
     g_filter_owner = 0;                      /* the megafunction GamestateUpdate */
     g_p2_pass_pending = 1;                   /* calls next is player 1's pass */
 }
 
-/* Called first thing in the gameplay tick override. Runs player 2's moby pass.
-   Returns 1 if that pass started a sequence retail would skip Spyro's tick
-   for (fairy, balloonist, flight results, level transition), so the caller
-   returns without ticking. */
+/* Called first thing in the gameplay tick override. Runs each shadow's moby
+   pass, in slot order. Returns 1 if a pass started a sequence retail would
+   skip Spyro's tick for (fairy, balloonist, flight results, level transition),
+   so the caller returns without ticking. */
 int coop_mobys_p2_pass(CPUState* cpu) {
-    g_filter_owner = -1;                     /* player 1's pass is over */
+    g_filter_owner = -1;                     /* slot 0's pass is over */
     if (!g_p2_pass_pending)
         return 0;
     g_p2_pass_pending = 0;
 
     CoopArena* A = coop_arena();
-    if (!two_pass_allowed(A))
-        return 0;                            /* one of his mobys started a sequence */
-
     uint32_t update = *(uint32_t*)g_api->guest(OP_GADDR_g_UpdateMoby);
     if (update == 0)
         return 0;
 
     SavedRegs regs;
     save_regs(cpu, &regs);
-
     CoopMobyArena* M = coop_moby_arena();
-    uint32_t mobys_vaddr = *(uint32_t*)g_api->guest(OP_GADDR_g_LevelMobys);
-    Moby* mobys = (Moby*)g_api->guest(mobys_vaddr);
-    g_assigned_n = assign_mobys(M, A, mobys, mobys_vaddr);  /* his pass may have spawned some */
+    int n = coop_seeded_shadows();
 
-    /* Camera too: sound attenuates from the camera, so an enemy dying next to
-       player 2 has to be heard from his camera, not player 1's. */
-    coop_swap_camera();
-    coop_swap_spyro();
-    A->swapped = 1;
+    for (int k = 1; k <= n; k++) {
+        if (!two_pass_allowed(A))
+            break;
 
-    coop_fairy_mute(1);
-    p2_sparx_keep(cpu, M);
-    load_regs(cpu, &regs);
+        uint32_t mobys_vaddr = *(uint32_t*)g_api->guest(OP_GADDR_g_LevelMobys);
+        Moby* mobys = (Moby*)g_api->guest(mobys_vaddr);
+        g_assigned_n = assign_mobys(M, mobys, mobys_vaddr);  /* a pass may have spawned some */
 
-    /* For this pass, player 2's dragonfly IS "the" Sparx: the megafunction
-       finds the followed Sparx through g_Sparx and homes it on the anchor,
-       which his tick left as his position. Both go back on every path;
-       g_Sparx is our bookkeeping and must never leak. */
-    uint32_t* g_sparx = (uint32_t*)g_api->guest(OP_GADDR_g_Sparx);
-    int32_t*  anchor  = guest32(OP_GADDR_D_80077798);
-    uint32_t  sparx1  = *g_sparx;
-    int32_t   saved_anchor[3] = { anchor[0], anchor[1], anchor[2] };
-    if (M->p2_sparx != 0) {
-        *g_sparx = M->p2_sparx;
-        memcpy(anchor, guest32(OP_GADDR_g_Spyro + SPYRO_OFF_POSITION), 12);
-    }
+        /* Camera too: sound attenuates from the camera, so an enemy dying next
+           to this dragon has to be heard from his camera, not slot 0's. */
+        coop_swap_camera(k);
+        coop_swap_spyro(k);
+        A->swapped = (uint32_t)k;
 
-    g_filter_owner = 1;
-    g_api->call(cpu, update);                /* the level's megafunction, his pass */
-    g_filter_owner = -1;
+        coop_fairy_mute(k);
+        shadow_sparx_keep(cpu, M, k);
+        load_regs(cpu, &regs);
 
-    *g_sparx = sparx1;
-    if (coop_gamestate() == GS_PLAYING)
-        memcpy(anchor, saved_anchor, 12);
-
-    g_stats.moby_two_pass++;
-    A->swapped = 0;
-    load_regs(cpu, &regs);
-
-    int32_t gs = coop_gamestate();
-    if (gs != GS_PLAYING) {
-        /* One of HIS mobys (dragon statue, balloonist, portal) started a
-           global sequence with his Spyro and camera live. Leave them live so
-           the sequence has its player, exactly as the tick does. */
-        if (gs == 4 || gs == 5) {
-            A->ready = 0;
-            coop_extra_arena()->p2_health_carry[0] = 0;
-            g_stats.deaths++;
-        } else {
-            A->handover = 1;
-            g_stats.handovers++;
+        /* For this pass, his dragonfly IS "the" Sparx: the megafunction finds
+           the followed Sparx through g_Sparx and homes it on the anchor, which
+           his tick left as his position. Both go back on every path; g_Sparx
+           is our bookkeeping and must never leak. */
+        uint32_t* g_sparx = (uint32_t*)g_api->guest(OP_GADDR_g_Sparx);
+        uint32_t  mine    = *coop_shadow(k).sparx;
+        int32_t*  anchor  = guest32(OP_GADDR_D_80077798);
+        uint32_t  sparx1  = *g_sparx;
+        int32_t   saved_anchor[3] = { anchor[0], anchor[1], anchor[2] };
+        if (mine != 0) {
+            *g_sparx = mine;
+            memcpy(anchor, guest32(OP_GADDR_g_Spyro + SPYRO_OFF_POSITION), 12);
         }
-        /* GamestateUpdate skips Spyro's tick for these after a moby pass. */
-        return gs == 11 || gs == 12 || gs == 7 || gs == 1;
-    }
 
-    coop_swap_spyro();
-    coop_swap_camera();
+        g_filter_owner = k;
+        g_api->call(cpu, update);            /* the level's megafunction, his pass */
+        g_filter_owner = -1;
+
+        *g_sparx = sparx1;
+        if (coop_gamestate() == GS_PLAYING)
+            memcpy(anchor, saved_anchor, 12);
+
+        g_stats.moby_two_pass++;
+        A->swapped = 0;
+        load_regs(cpu, &regs);
+
+        int32_t gs = coop_gamestate();
+        if (gs != GS_PLAYING) {
+            /* One of HIS mobys (dragon statue, balloonist, portal) started a
+               global sequence with his Spyro and camera live. Leave them live
+               so the sequence has its player, exactly as the tick does. */
+            if (gs == 4 || gs == 5) {
+                A->ready = 0;
+                g_stats.deaths++;
+            } else {
+                CoopPartyArena* P = coop_party_arena();
+                int32_t t = P->person[0];
+                P->person[0] = P->person[k];
+                P->person[k] = t;
+                A->handover = (uint32_t)k;
+                g_stats.handovers++;
+            }
+            /* GamestateUpdate skips Spyro's tick for these after a moby pass. */
+            return gs == 11 || gs == 12 || gs == 7 || gs == 1;
+        }
+
+        coop_swap_spyro(k);
+        coop_swap_camera(k);
+    }
     return 0;
 }
 

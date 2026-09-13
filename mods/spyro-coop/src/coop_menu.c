@@ -240,11 +240,11 @@ static void back_to_multiplayer(CPUState* cpu) {
     chime(cpu, SND_MOVE);
 }
 
-static void multiplayer_adjust(CPUState* cpu) {
+static void multiplayer_adjust(CPUState* cpu, int delta) {
     CoopMenuArena* m = M();
     switch (m->cursor) {
     case MP_PLAYERS:
-        g_settings.players = (g_settings.players == 2) ? 1 : 2;
+        g_settings.players = (g_settings.players - 1 + delta + COOP_MAX_PLAYERS) % COOP_MAX_PLAYERS + 1;
         break;
     case MP_RESPAWN:
         g_settings.respawn_modern = !g_settings.respawn_modern;
@@ -300,7 +300,7 @@ static void page_input(CPUState* cpu, int32_t down) {
         chime(cpu, SND_MOVE);
     } else if (down & (PAD_LEFT | PAD_RIGHT)) {
         if (colors) colors_adjust(cpu, (down & PAD_RIGHT) ? 1 : -1);
-        else        multiplayer_adjust(cpu);
+        else        multiplayer_adjust(cpu, (down & PAD_RIGHT) ? 1 : -1);
     } else if (colors && (down & (PAD_L2 | PAD_R2))) {
         colors_adjust(cpu, (down & PAD_R2) ? 16 : -16);   /* coarse */
     } else if (colors && (down & PAD_SQUARE)) {
@@ -317,7 +317,7 @@ static void page_input(CPUState* cpu, int32_t down) {
             else                         colors_adjust(cpu, 1);
         } else {
             if (m->cursor == MP_DONE) back_to_list(cpu);
-            else                      multiplayer_adjust(cpu);
+            else                      multiplayer_adjust(cpu, 1);
         }
     }
 }
@@ -377,12 +377,14 @@ static void hint(CPUState* cpu, const char* s, int y) {
     text(cpu, s, 256 - text_span(s, 12, 13) / 2, y, 0x1100, 12, 13, SHADE_NORMAL);
 }
 
+static const char* const k_digits[COOP_MAX_PLAYERS] = { "1", "2", "3", "4" };
+
 static void draw_multiplayer(CPUState* cpu) {
     CoopMenuArena* m = M();
     static const int y[MP_ROWS] = { 114, 128, 142, 156, 170 };
     static const char* const labels[MP_ROWS] = { "PLAYERS", "RESPAWN", "SPLIT", "COLORS", "DONE" };
     const char* values[MP_ROWS] = {
-        g_settings.players == 2 ? "2" : "1",
+        k_digits[g_settings.players < 1 ? 0 : g_settings.players > 4 ? 3 : g_settings.players - 1],
         g_settings.respawn_modern ? "MODERN" : "ORIGINAL",
         g_settings.split_vertical ? "VERTICAL" : "HORIZONTAL",
         NULL,

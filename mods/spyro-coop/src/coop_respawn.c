@@ -7,7 +7,7 @@
  * spends a life, fades out, reloads the level and puts Spyro back at the
  * checkpoint. In co-op that drags both players back. Spyro2x2 does the same.
  *
- * HERE: when one dragon dies while his partner is alive and a life remains,
+ * HERE: when one dragon dies while another is alive and a life remains,
  * the trigger is not called at all. We spend the life, tell the HUD, put him
  * at the respawn point standing on the floor, and reset him with the game's
  * own ResetSpyroState, which is what the reload would have done to him. The
@@ -19,13 +19,13 @@
  * trigger runs means none of that is ever set up.
  *
  * The stock trigger still runs, unchanged, when there is nobody to carry on:
- * the partner is already down (a double death), or no lives are left (a real
- * game over). A double death charges both lives.
+ * every other dragon is already down (a multiple death), or no lives are left
+ * (a real game over). A multiple death charges a life per dragon.
  *
  * WHOSE DEATH: both call sites are inside Spyro's tick, and the tick override
- * swaps player 2 in for his, so the live dragon is the dying one and the
- * shadow is always his partner. The tick override records which player is
- * ticking for the respawn log and the fairy mute.
+ * swaps each shadow in for his, so the live dragon is the dying one. While
+ * shadow k ticks, slot 0's state sits in k's shadow buffer and every other
+ * shadow in its own. The tick override records which slot is ticking.
  */
 
 #include "coop.h"
@@ -191,6 +191,12 @@ void coop_sparx_heal(CPUState* cpu) {
  * The death override
  * ---------------------------------------------------------------------- */
 
+/* Another dragon's health while `ticking` is the live one (see WHOSE DEATH). */
+static int32_t other_health(int ticking, int slot) {
+    int buffer = (slot == 0) ? ticking : slot;
+    return *(int32_t*)(coop_shadow(buffer).spyro + SPYRO_OFF_HEALTH);
+}
+
 static void on_trigger_respawn(CPUState* cpu) {
     CoopArena* A = coop_arena();
 
@@ -201,18 +207,25 @@ static void on_trigger_respawn(CPUState* cpu) {
         return;
     }
 
-    int      dying        = coop_ticking_player();
-    int32_t* other_health = (int32_t*)(A->spyro + SPYRO_OFF_HEALTH);
-    int32_t* lives        = guest32(OP_GADDR_g_SpyroLifeCount);
-    int32_t* hud_lives    = guest32(OP_GADDR_g_Hud + HUD_OFF_LIFE_COUNT);
+    int      dying     = coop_ticking_player();
+    int      shadows   = coop_seeded_shadows();
+    int32_t* lives     = guest32(OP_GADDR_g_SpyroLifeCount);
+    int32_t* hud_lives = guest32(OP_GADDR_g_Hud + HUD_OFF_LIFE_COUNT);
 
-    if (*other_health < 0 || *lives == 0) {
-        /* Nobody to carry on: the stock sequence, as retail. A double death
-           arrives here with the partner already down, and the stock trigger
-           charges one life for the pair, so charge his now. Never below
-           zero: with one life left, a double death is the game over it
-           already was. */
-        if (*other_health < 0 && *lives > 0) {
+    int alive = 0, down = 0;
+    for (int s = 0; s <= shadows; s++) {
+        if (s == dying)
+            continue;
+        if (other_health(dying, s) < 0) down++;
+        else                            alive++;
+    }
+
+    if (alive == 0 || *lives == 0) {
+        /* Nobody to carry on: the stock sequence, as retail. A multiple death
+           arrives here with the others already down, and the stock trigger
+           charges one life for them all, so charge theirs now. Never below
+           zero: with too few lives left, it is the game over it already was. */
+        for (int i = 0; alive == 0 && i < down && *lives > 0; i++) {
             (*lives)--;
             *hud_lives = *lives;
             g_stats.double_deaths++;
@@ -288,8 +301,8 @@ static void on_trigger_respawn(CPUState* cpu) {
        or next frame reads as a level restart and reseeds the pair. */
     coop_resample_teleport();
 
-    /* Player 1's Sparx is tracked through g_Sparx, which the level nulled when
-       it died, and only a reload would restore it. Player 2's is respawned by
+    /* Slot 0's Sparx is tracked through g_Sparx, which the level nulled when
+       it died, and only a reload would restore it. A shadow's is respawned by
        his own bookkeeping once his health is back. */
     if (dying == 0)
         R->sparx_heal_pending = 1;
@@ -317,7 +330,7 @@ static void on_trigger_respawn(CPUState* cpu) {
     g_stats.individual_respawns++;
     coop_log(OP_MOD_LOG_INFO,
              "player %d respawned on his own at the %s (%d,%d,%d)%s, %d lives left",
-             dying + 1, source, pos[0], pos[1], pos[2],
+             coop_physical_player(dying) + 1, source, pos[0], pos[1], pos[2],
              grounded ? ", grounded" : ", floor not found, height kept", *lives);
     /* No base(): the stock trigger never runs on this path. */
 }

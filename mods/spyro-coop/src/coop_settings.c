@@ -50,7 +50,7 @@ static void set_defaults(CoopSettings* s) {
 }
 
 static void clamp(CoopSettings* s) {
-    s->players        = (s->players == 1) ? 1 : 2;
+    s->players        = (s->players < 1) ? 1 : (s->players > COOP_MAX_PLAYERS) ? COOP_MAX_PLAYERS : s->players;
     s->respawn_modern = s->respawn_modern ? 1 : 0;
     s->split_vertical = s->split_vertical ? 1 : 0;
     s->draw_p2        = s->draw_p2 ? 1 : 0;
@@ -176,7 +176,7 @@ static void settings_panel(const openpete_mod_ui_t* ui) {
         g_ui_copy = g_settings;
 
     int changed = 0;
-    static const char* const players[]  = { "1", "2" };
+    static const char* const players[]  = { "1", "2", "3", "4" };
     static const char* const respawn[]  = { "Original", "Modern" };
     static const char* const split[]    = { "Horizontal", "Vertical" };
 
@@ -184,8 +184,9 @@ static void settings_panel(const openpete_mod_ui_t* ui) {
     ui->separator();
 
     int idx = g_ui_copy.players - 1;
-    if (ui->combo("Players", &idx, players, 2)) { g_ui_copy.players = idx + 1; changed = 1; }
-    ui->tooltip("2 adds player 2 beside player 1. 1 removes him.");
+    if (ui->combo("Players", &idx, players, COOP_MAX_PLAYERS)) { g_ui_copy.players = idx + 1; changed = 1; }
+    ui->tooltip("How many dragons. Extra players join beside player 1 and, until OpenPete "
+                "feeds more controllers, copy player 1's input.");
 
     idx = g_ui_copy.respawn_modern;
     if (ui->combo("Respawn", &idx, respawn, 2)) { g_ui_copy.respawn_modern = idx; changed = 1; }

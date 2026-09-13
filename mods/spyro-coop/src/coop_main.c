@@ -16,6 +16,7 @@ static uint32_t g_moby_vaddr;   /* the moby partition block, likewise */
 static uint32_t g_extra_vaddr;  /* the third block, likewise */
 static uint32_t g_respawn_vaddr;  /* the fourth block, likewise */
 static uint32_t g_menu_vaddr;     /* the fifth block, likewise */
+static uint32_t g_party_vaddr;    /* the sixth block: players 3 and 4 */
 
 CoopArena* coop_arena(void) {
     /* Resolved on every use: the host view is not promised to survive a
@@ -41,6 +42,10 @@ void coop_log(int level, const char* fmt, ...) {
     g_api->log(g_self, level, "%s", buf);
 }
 
+CoopPartyArena* coop_party_arena(void) {
+    return (CoopPartyArena*)g_api->guest(g_party_vaddr);
+}
+
 CoopRespawnArena* coop_respawn_arena(void) {
     return (CoopRespawnArena*)g_api->guest(g_respawn_vaddr);
 }
@@ -55,7 +60,11 @@ CoopMobyArena* coop_moby_arena(void) {
     return (CoopMobyArena*)g_api->guest(g_moby_vaddr);
 }
 
-int coop_enabled(void)      { return (g_settings.players == 2); }
+int coop_enabled(void)      { return g_settings.players >= 2; }
+int coop_shadow_count(void) {
+    int n = g_settings.players - 1;
+    return (n < 0) ? 0 : (n > COOP_MAX_SHADOWS) ? COOP_MAX_SHADOWS : n;
+}
 int coop_draw_enabled(void) { return g_settings.draw_p2; }
 
 /* ------------------------------------------------------------------------
@@ -75,13 +84,13 @@ void coop_publish_status(void) {
     int32_t    p2[3];
     coop_p2_position(p2);
 
-    if (g_settings.players != 2)
-        coop_status("Player 2: OFF (players set to 1)");
+    if (g_settings.players < 2)
+        coop_status("Extra players: OFF (players set to 1)");
     else if (A->ready)
-        coop_status("Player 2: active in level %d%s",
+        coop_status("Players: %d, active in level %d%s", coop_seeded_shadows() + 1,
                          A->last_level, A->handover ? ", handover pending" : "");
     else
-        coop_status("Player 2: waiting for gameplay");
+        coop_status("Players: %d, waiting for gameplay", g_settings.players);
 
     coop_status("P1 at %d, %d, %d", p1[0], p1[1], p1[2]);
     if (A->ready) {
@@ -202,6 +211,11 @@ int openpete_mod_entry(const openpete_mod_api_t* api, openpete_mod_t* self) {
         coop_log(OP_MOD_LOG_ERROR, "could not allocate the menu block");
         return 1;
     }
+    g_party_vaddr = api->guest_alloc(self, sizeof(CoopPartyArena), 4, 0, &view);
+    if (g_party_vaddr == 0) {
+        coop_log(OP_MOD_LOG_ERROR, "could not allocate the players 3 and 4 block");
+        return 1;
+    }
 
 
     if (coop_players_install() != 0 || coop_draw_install() != 0 ||
@@ -214,7 +228,7 @@ int openpete_mod_entry(const openpete_mod_api_t* api, openpete_mod_t* self) {
     coop_log(OP_MOD_LOG_INFO,
              "spyro-coop phase A up: arena %u bytes at 0x%08X, player 2 %s",
              (unsigned)sizeof(CoopArena), g_arena_vaddr,
-             g_settings.players == 2 ? "enabled" : "off (players = 1)");
+             g_settings.players >= 2 ? "enabled" : "off (players = 1)");
     coop_publish_status();
     return 0;
 }

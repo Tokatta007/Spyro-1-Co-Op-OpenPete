@@ -74,6 +74,10 @@ extern openpete_mod_t*           g_self;
    one hands over to the next. Must stay above the body radius (416). */
 #define P2_START_OFFSET 0x400
 
+/* Up to four dragons: slot 0 is the live one, slots 1..3 are shadows. */
+#define COOP_MAX_PLAYERS 4
+#define COOP_MAX_SHADOWS (COOP_MAX_PLAYERS - 1)
+
 /* ------------------------------------------------------------------------
  * Per-player state. Lives in the guest arena, so savestates, rewind and
  * runahead carry it exactly as they carry guest RAM. Host statics do not
@@ -87,15 +91,16 @@ extern openpete_mod_t*           g_self;
 typedef struct {
     uint32_t ready;          /* player 2 is seeded; the master switch */
     int32_t  last_level;     /* level id he was seeded in */
-    uint32_t handover;       /* his tick started a sequence; identities crossed */
+    uint32_t handover;       /* 0, or the shadow slot (1..3) whose tick started a
+                                sequence: that slot's state is live until it ends */
     int32_t  substeps_owed;  /* physics budget captured before player 1 spends it */
     int32_t  last_seq;       /* last non-zero gamestate, for the teleport detector */
-    uint32_t swapped;        /* 1 while player 2's state is live mid-override */
+    uint32_t swapped;        /* non-zero while a shadow's state is live mid-override */
     uint32_t view_key_down;  /* last tick's view-swap key, for edge detection.
                                 Here and not a host static, so rewind and
                                 runahead cannot miss or repeat a press. */
     int32_t  tp_sample[3];   /* live dragon's position last frame */
-    uint8_t  spyro[SPYRO_STATE_BYTES];
+    uint8_t  spyro[SPYRO_STATE_BYTES];       /* shadow slot 1 */
     uint8_t  camera[CAMERA_STRUCT_BYTES];
     int32_t  camera_extra[CAMERA_EXTRA_COUNT];
     uint8_t  pad[PAD_STATE_BYTES];
@@ -113,7 +118,7 @@ typedef struct {
     uint8_t  owner[MOBY_MAX];      /* 0 player 1, 1 player 2, 2 dead slot */
     uint8_t  unused_was_stash[MOBY_MAX * 2]; /* masking retired 2026-09-13; kept
                                                so v0.4.0 savestates stay valid */
-    uint32_t p2_sparx;             /* guest Moby*, 0 = none spawned */
+    uint32_t p2_sparx;             /* shadow slot 1's Sparx: guest Moby*, 0 = none */
     uint32_t sparx1_seen;          /* last g_Sparx seen: level rebuild detector */
     uint32_t sparx_spawns_level;   /* spawns since the last rebuild; capped */
 } CoopMobyArena;
@@ -155,6 +160,41 @@ typedef struct {
 } CoopMenuArena;
 
 /* ------------------------------------------------------------------------
+ * A sixth allocation, appended for the ledger reason above: players 3 and 4
+ * (2026-09-13). Shadow slot 1 stays in CoopArena; slots 2 and 3 live here,
+ * with what every slot needs beyond it.
+ * ---------------------------------------------------------------------- */
+typedef struct {
+    uint8_t spyro[SPYRO_STATE_BYTES];
+    uint8_t camera[CAMERA_STRUCT_BYTES];
+    int32_t camera_extra[CAMERA_EXTRA_COUNT];
+    uint8_t pad[PAD_STATE_BYTES];
+} CoopShadow;
+
+typedef struct {
+    int32_t    shadows;        /* shadow slots seeded, 1..3; valid while ready */
+    int32_t    person[COOP_MAX_PLAYERS]; /* whose dragon is in each slot (0-based),
+                                            a permutation; the view key and
+                                            handovers trade entries */
+    CoopShadow extra[2];       /* shadow slots 2 and 3 */
+    uint32_t   sparx[2];       /* their Sparx, guest Moby*, 0 = none */
+    int32_t    health_carry[COOP_MAX_PLAYERS][2]; /* per slot: pending, health */
+} CoopPartyArena;
+
+/* One shadow slot's buffers, wherever they live. */
+typedef struct {
+    uint8_t*  spyro;
+    uint8_t*  camera;
+    int32_t*  camera_extra;
+    uint8_t*  pad;
+    uint32_t* sparx;           /* where this slot's Sparx pointer is kept */
+} CoopShadowView;
+
+/* Moby owner codes beyond the slots 0..3. */
+#define OWNER_DEAD 0xFE        /* a dead slot in the moby array: belongs to nobody */
+#define OWNER_NEW  0xFF        /* not assigned yet: take the plain nearest */
+
+/* ------------------------------------------------------------------------
  * Host counters. Display only: they reset after a savestate load, which is
  * acceptable for numbers nobody plays against.
  * ---------------------------------------------------------------------- */
@@ -166,6 +206,7 @@ typedef struct {
     unsigned seeds, level_reseeds, deaths, handovers, teleports;
     unsigned view_swaps;
     unsigned p2_draws, p2_flame_draws, flyin_draws;
+    unsigned p2_draws_skipped;    /* extra dragons left out: primitive buffer nearly full */
     unsigned moby_two_pass, moby_single_pass, list_dropped;
     unsigned sparx_spawns, pushes;
     unsigned owner_flips;
@@ -173,10 +214,10 @@ typedef struct {
     unsigned sounds_nearer_p2;    /* voices measured from player 2's camera */
     unsigned pod_members;         /* mobys in a pod, last assignment */
     unsigned pod_merges;          /* pods joined because a list crossed them */
-    unsigned cam_on_shared[2];    /* frames each camera focused on D_80077798 */
-    unsigned cam_runaway[2];      /* frames each camera was too far from its dragon */
-    unsigned cam_runaway_events[2];
-    uint32_t cam_max_dist[2];
+    unsigned cam_on_shared[COOP_MAX_PLAYERS];  /* frames each camera focused on D_80077798 */
+    unsigned cam_runaway[COOP_MAX_PLAYERS];    /* frames each camera was too far from its dragon */
+    unsigned cam_runaway_events[COOP_MAX_PLAYERS];
+    uint32_t cam_max_dist[COOP_MAX_PLAYERS];
     unsigned probe_refusals, query_refusals;
     unsigned padvsync_calls, padvsync_in_swap;
     unsigned menu_opens;          /* Multiplayer page opened from the pause list */
@@ -187,10 +228,8 @@ extern CoopStats g_stats;
 /* ------------------------------------------------------------------------
  * Settings (coop_settings.c). Host state, tick context only.
  * ---------------------------------------------------------------------- */
-#define COOP_MAX_PLAYERS 4   /* colours are kept for four; play supports two so far */
-
 typedef struct {
-    int     players;         /* 1 or 2 */
+    int     players;         /* 1 to 4 */
     int     respawn_modern;  /* 1 modern, 0 original */
     int     split_vertical;  /* 1 vertical, 0 horizontal; no effect until split-screen exists */
     uint8_t color[COOP_MAX_PLAYERS][4]; /* per player: red, green, blue, strength */
@@ -210,9 +249,11 @@ CoopArena* coop_arena(void);
 CoopMobyArena* coop_moby_arena(void);
 CoopExtraArena* coop_extra_arena(void);
 CoopRespawnArena* coop_respawn_arena(void);
+CoopPartyArena* coop_party_arena(void);
 int        coop_respawn_enabled(void);
 int        coop_hysteresis_percent(void);
-int        coop_enabled(void);
+int        coop_enabled(void);        /* two players or more */
+int        coop_shadow_count(void);   /* dragons besides the live one the settings ask for */
 int        coop_draw_enabled(void);
 void       coop_publish_status(void);
 
@@ -220,10 +261,12 @@ void       coop_publish_status(void);
 int  coop_players_install(void);
 void coop_players_disable(void);
 void coop_p2_position(int32_t out[3]);
-void coop_swap_spyro(void);
-int  coop_physical_player(int slot);  /* which player's dragon is in slot 0 or 1 */
-void coop_formation_offset(int32_t out[3]);
-void coop_swap_camera(void);
+CoopShadowView coop_shadow(int slot);      /* slot 1..3 */
+int  coop_seeded_shadows(void);            /* 0 unless ready */
+void coop_swap_spyro(int slot);
+void coop_swap_camera(int slot);
+int  coop_physical_player(int slot);  /* which player's dragon is in slot 0..3 */
+void coop_formation_offset(int slot, int32_t out[3]);
 void coop_handover_resume(void);
 void coop_resample_teleport(void);
 int  coop_in_gameplay_tick(void);   /* inside Spyro's gameplay tick right now */
@@ -234,7 +277,7 @@ int32_t coop_level_id(void);
 /* coop_mobys.c */
 int  coop_mobys_install(void);
 int  coop_mobys_p2_pass(CPUState* cpu);
-void coop_mobys_identities_swapped(void);
+void coop_mobys_identities_swapped(int slot);  /* slot traded identities with slot 0 */
 
 /* coop_respawn.c */
 int  coop_respawn_install(void);

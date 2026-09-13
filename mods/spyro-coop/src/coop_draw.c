@@ -38,10 +38,9 @@
  * (the fairy kiss) still show. Only when his strength drops to 0 do we write
  * once more, to take our tint back off.
  * ---------------------------------------------------------------------- */
-static int     g_drawing_p2;          /* set while the gameplay draw runs his model */
-static uint8_t g_tint_written[2];     /* last strength written per player */
+static uint8_t g_tint_written[COOP_MAX_PLAYERS];  /* last strength written per slot */
 
-/* `slot` is 0 for the live dragon, 1 for the other; the colour is the
+/* `slot` is 0 for the live dragon, 1..3 for a shadow; the colour is the
    person's, looked up through coop_physical_player. */
 static void apply_tint(int slot) {
     const uint8_t* c = g_settings.color[coop_physical_player(slot)];
@@ -69,9 +68,45 @@ static void apply_tint(int slot) {
 static int g_p2_drawn_this_scene;   /* the composer's hook drew him already */
 static int g_in_extra_draw;         /* inside a call we made ourselves */
 
+/* ONE SET OF EXTRA DRAGONS PER TICK (2026-09-13). On OpenPete the scene
+   composer's Spyro draw, and the portal sequences', run three times per tick
+   with the primitive cursor carried on, so the extra dragons were drawn three
+   times over. With four players the draw list outgrew the engine's DrawOTag
+   scratch ("DrawOTag scratch overflow"), and the overflow corrupted game state
+   within a tick: dragons at heights of -1,476,385,299, a false death, a hang.
+   Drawing them in the first run of each tick only fixed it, and all four stay
+   visible in both renderers. A tick is counted by the camera update, which
+   runs once per tick in gameplay and in sequences alike. */
+static unsigned g_last_extra_tick = ~0u;
+static unsigned g_last_wing_tick  = ~0u;
+
+static unsigned tick_id(void) {
+    return g_stats.camera_gameplay + g_stats.camera_other;
+}
+
 static int p2_draw_wanted(CoopArena* A) {
-    return coop_enabled() && coop_draw_enabled() && A->ready &&
+    return coop_enabled() && coop_draw_enabled() && coop_seeded_shadows() > 0 &&
            *guest32(OP_GADDR_g_LevelId) == A->last_level;
+}
+
+/* THE PRIMITIVE BUFFER HAS A FIXED SIZE, AND SPYRO'S RENDERERS DO NOT CHECK IT
+   (measured 2026-09-13). Every primitive of a frame is written into one buffer
+   of 0x1C000 bytes, between the cursor D_800757B0 and the limit D_80075780.
+   A dragon costs about 7.4 KB for the model and 0.64 KB for his shadow. On
+   OpenPete the scene composer's Spyro draw runs three times per tick without
+   the cursor going back, so every extra dragon is paid for three times. With
+   four players that ran past the limit, and the overflow corrupted the dragons'
+   state within a tick (positions of -1,476,385,299, a false death, a hang).
+   So an extra dragon is only drawn while a generous margin remains; when it
+   does not, that run leaves him out rather than writing past the end. */
+#define PRIM_DRAGON_RESERVE 24000   /* one dragon with flame, plus room for the rest of the scene.
+                                       Kept as a safety net: the real overflow was the repeat
+                                       draws below, not this buffer, which never ran out. */
+
+static int prim_room_for_a_dragon(void) {
+    uint32_t cursor = *(uint32_t*)g_api->guest(OP_GADDR_D_800757B0);
+    uint32_t limit  = *(uint32_t*)g_api->guest(OP_GADDR_D_80075780);
+    return limit > cursor && limit - cursor > PRIM_DRAGON_RESERVE;
 }
 
 /* Player 2's model, shadow and flame, each as its own renderer call, with his
@@ -82,28 +117,31 @@ static void draw_player2(CPUState* cpu) {
     CoopArena* A = coop_arena();
     SavedRegs regs;
     save_regs(cpu, &regs);
+    int n = coop_seeded_shadows();
 
-    coop_swap_spyro();
-    A->swapped = 1;  /* lets the PadVSync counter see this window too */
-    g_in_extra_draw = 1;
+    for (int k = 1; k <= n; k++) {
+        coop_swap_spyro(k);
+        A->swapped = (uint32_t)k;  /* lets the PadVSync counter see this window too */
+        g_in_extra_draw = 1;
 
-    /* Both checks read HIS state: he is swapped in. */
-    if (*guest32(OP_GADDR_g_IsSpyroHidden) == 0) {
-        g_drawing_p2 = 1;                            /* tinted as player 2 */
-        apply_tint(1);                               /* before the call, not inside it */
-        g_api->call(cpu, OP_FNADDR_func_80023AC4);   /* model */
-        g_drawing_p2 = 0;
-        g_api->call(cpu, OP_FNADDR_func_80059A48);   /* drop shadow */
-        g_stats.p2_draws++;
+        /* Both checks read HIS state: he is swapped in. */
+        if (!prim_room_for_a_dragon()) {
+            g_stats.p2_draws_skipped++;
+        } else if (*guest32(OP_GADDR_g_IsSpyroHidden) == 0) {
+            apply_tint(k);                               /* before the call, not inside it */
+            g_api->call(cpu, OP_FNADDR_func_80023AC4);   /* model */
+            g_api->call(cpu, OP_FNADDR_func_80059A48);   /* drop shadow */
+            g_stats.p2_draws++;
+        }
+        if (*guest8(OP_GADDR_g_SpyroFlame + FLAME_OFF_ACTIVE) != 0 && prim_room_for_a_dragon()) {
+            g_api->call(cpu, OP_FNADDR_func_80058D64);   /* flame */
+            g_stats.p2_flame_draws++;
+        }
+
+        g_in_extra_draw = 0;
+        A->swapped = 0;
+        coop_swap_spyro(k);
     }
-    if (*guest8(OP_GADDR_g_SpyroFlame + FLAME_OFF_ACTIVE) != 0) {
-        g_api->call(cpu, OP_FNADDR_func_80058D64);   /* flame */
-        g_stats.p2_flame_draws++;
-    }
-
-    g_in_extra_draw = 0;
-    A->swapped = 0;
-    coop_swap_spyro();
 
     /* The original expects its own arguments, and api->call clobbered them.
        The CPUState reference requires restoring them. */
@@ -124,10 +162,11 @@ void coop_tint_state(void) {
     if (A->swapped)
         return;                              /* never mid-swap */
     apply_tint(0);
-    if (A->ready) {
-        const uint8_t* c = g_settings.color[coop_physical_player(1)];
-        if (c[3] != 0 || g_tint_written[1] != 0)
-            memcpy(A->spyro + SPYRO_OFF_COLOR_FILTER, c, 4);
+    int n = coop_seeded_shadows();
+    for (int k = 1; k <= n; k++) {
+        const uint8_t* c = g_settings.color[coop_physical_player(k)];
+        if (c[3] != 0 || g_tint_written[k] != 0)
+            memcpy(coop_shadow(k).spyro + SPYRO_OFF_COLOR_FILTER, c, 4);
     }
 }
 
@@ -197,7 +236,7 @@ int coop_draw_install(void) {
 
 /* One wingman draw at wing_pos in his player's colour, as his own call, with
    position, flame matrix and filter put back exactly afterwards. */
-static void draw_wingman(CPUState* cpu, int32_t* pos, int32_t* mtx, uint8_t* filter,
+static void draw_wingman(CPUState* cpu, int slot, int32_t* pos, int32_t* mtx, uint8_t* filter,
                          const int32_t wing_pos[3]) {
     int32_t saved_pos[3], saved_mtx[FLAME_MATRIX_INTS];
     uint8_t saved_filter[4];
@@ -206,7 +245,7 @@ static void draw_wingman(CPUState* cpu, int32_t* pos, int32_t* mtx, uint8_t* fil
     memcpy(saved_filter, filter, 4);
 
     memcpy(pos, wing_pos, sizeof saved_pos);
-    const uint8_t* wing = g_settings.color[coop_physical_player(1)];
+    const uint8_t* wing = g_settings.color[coop_physical_player(slot)];
     if (wing[3] != 0)
         memcpy(filter, wing, 4);
     else
@@ -227,11 +266,12 @@ static void on_spyro_model(CPUState* cpu) {
         g_api->base(cpu);                    /* a call we made: colour already set */
         return;
     }
-    apply_tint(g_drawing_p2 ? 1 : 0);
+    apply_tint(0);
 
     /* The gameplay scene composer: player 2 first, as his own call. */
     if (cpu->ra == RA_COMPOSER_MODEL) {
-        if (p2_draw_wanted(coop_arena())) {
+        if (p2_draw_wanted(coop_arena()) && g_last_extra_tick != tick_id()) {
+            g_last_extra_tick = tick_id();
             draw_player2(cpu);
             g_p2_drawn_this_scene = 1;
             apply_tint(0);                   /* the lead's colour, for his call */
@@ -253,14 +293,18 @@ static void on_spyro_model(CPUState* cpu) {
     uint8_t* filter = guest8(OP_GADDR_g_Spyro + SPYRO_OFF_COLOR_FILTER);
     int32_t  right[3], wing_pos[3];
 
-    coop_formation_offset(right);
-    for (int i = 0; i < 3; i++)
-        wing_pos[i] = pos[i] + right[i];
-
-    /* The wingman first, always: see DRAW ORDER MATTERS. */
+    /* The wingmen first, always: see DRAW ORDER MATTERS. One per extra player,
+       in the formation they are seeded in. */
     SavedRegs regs;
     save_regs(cpu, &regs);
-    draw_wingman(cpu, pos, mtx, filter, wing_pos);
-    load_regs(cpu, &regs);
+    int n = (g_last_wing_tick != tick_id()) ? coop_shadow_count() : 0;
+    g_last_wing_tick = tick_id();
+    for (int k = 1; k <= n; k++) {
+        coop_formation_offset(k, right);
+        for (int i = 0; i < 3; i++)
+            wing_pos[i] = pos[i] + right[i];
+        draw_wingman(cpu, k, pos, mtx, filter, wing_pos);
+        load_regs(cpu, &regs);
+    }
     g_api->base(cpu);
 }

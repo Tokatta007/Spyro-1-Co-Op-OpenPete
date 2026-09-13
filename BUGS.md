@@ -39,6 +39,35 @@ cannot be on one screen.
 
 ## 2. Missing, planned
 
+### M6. Three and four players: BUILT (v0.8.0), awaiting play
+
+Built 2026-09-13 at the user's request. The mod was written around exactly one
+extra dragon; it now runs up to three shadows (slots 1..3), with a table of
+which player is in which slot, so colours, moby ownership and Sparx follow the
+person through the view key and handovers. PLAYERS on the Multiplayer page
+and in the M panel goes from 1 to 4.
+
+- Tick, camera, moby pass, drawing and sound loop over the shadows; every moby
+  goes to its nearest dragon with the same hysteresis; each shadow keeps his
+  own Sparx and carries his own health across a level.
+- Body separation checks every pair.
+- Individual respawn works while ANY other dragon is alive; a death with the
+  rest already down runs the stock respawn and charges a life per dragon.
+- The portal formation: slot 1 on the right, slot 2 on the left, slot 3
+  outside slot 1, at the usual spacing.
+- The extra players still copy player 1's input, and are still invisible with
+  interpolation on (X1).
+
+**Found while testing, and fixed:** the extra dragons were drawn three times
+per tick, because OpenPete runs the composer's (and the portal's) Spyro draw
+three times per tick. With four players the draw list outgrew the engine's
+DrawOTag scratch and the overflow corrupted game state within a tick. They are
+now drawn once per tick, and all four stay visible in both renderers.
+
+Checked headless: 2, 3 and 4 players in Artisans for 300+ ticks each, and four
+through the Stone Hill portal and landing. Not yet exercised with four: deaths
+and respawns, handovers (dragons, balloonist), flight levels, the view key.
+
 ### M5. In-game Multiplayer and Color menus: stages 1 to 3 BUILT; stage 4 blocked on the engine
 
 Decided with the user 2026-09-13. The mod should be fully playable from a couch
