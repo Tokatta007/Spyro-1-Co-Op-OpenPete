@@ -45,43 +45,48 @@ the camera's distance to the other dragon, how far apart the dragons are, the
 camera's and both dragons' positions, and what the focus pointer points at, and
 flags `CLOSER TO THE OTHER DRAGON` when that is the case.
 
-**The deciding test still to run: the same savestate with Player 2 off.** If the
-camera does the same thing in the unmodded game, it is retail behaviour and the
-runaway threshold is too low. If it does not, player 2 causes it.
+**2026-09-13, second session, with the detailed log: every runaway was camera
+state `0x8000000A` focused on a nearby moby, probably the ram hitting that
+dragon**, and two were flagged closer to the other dragon, about 7,000 units up.
 
-### A2. The ram does not settle after its first charge in two-player
+**Leading explanation: A2.** A ram's own code steers the camera it hits
+(`func_level_20_8007E3A0` calls `func_800342F8` and `func_80033F08`) and, by
+the look of the focus pointers, writes itself into `g_Spyro + 0x21C`, which
+`func_8003FE40` copies into `m_Focus` with state `0x8000000A`. A ram pulled into
+both passes does all of that to player 2's camera while attacking player 1. PS1
+recorded the same mechanism for a mid-reaction ownership flip; the pod rule
+makes it happen every frame. **Test A1 again once the A2 fix has run.** If the
+camera still runs away, compare the same savestate with Player 2 off.
 
-**Seen 2026-09-12.** After charging and returning to its start, a ram should
-turn round and wait. In two-player it keeps turning left and right at random.
-Only after the first charge.
+### A2. Rams run at double speed and turn between the dragons: ROOT CAUSE FOUND, fix built
 
-**PS1 history:** the same symptom existed and was closed on 2026-08-30 without
-a fix aimed at it, credited (unproven) to the `g_PadBackup` offset typo that was
-zeroing enemy model pointers. That typo cannot exist here, so that explanation
-was either wrong or incomplete.
+**Seen 2026-09-12 and 2026-09-13.** A ram runs in place toward the dragon the
+camera is not on, moves at roughly twice its normal speed when aggressive, and
+fails to settle after a charge. With player 2 switched off, on the same
+savestate, it immediately turns and charges player 1 at normal speed.
 
-**Found and fixed 2026-09-13: the view-swap key reassigned every moby.**
-Ownership is stored per slot, and the key trades which dragon is in which
-slot, so every press handed each moby to the other physical dragon. That session
-logged 1,374 owner changes with 16 presses, and the user saw a ram change target
-right after swapping views. The key now swaps the owner values and the two
-Sparx, so each stays with its dragon. This removes a test artefact; it is not
-expected to be the root of A2, which appears without pressing the key.
+**Double speed means double updates.** Each frame one pass shows it player 1
+and the other shows it player 2, so it turns back and forth and moves twice.
 
-Also seen: a ram running in place toward player 2 while player 1 was closer.
-Consistent with the hysteresis, which keeps a moby's owner until the other
-dragon is 25% closer, but not proven for that ram.
+**Root cause, read from `func_80051FEC`, the moby update list builder.** The
+mod hides a moby from a pass by zeroing `m_WasDrawn` and `m_UpdateDistance`,
+which the builder's first loop honours. But every moby also has a pod index,
+`m_Pod` (`0x43`). Adding any moby marks its pod, and a second loop then adds
+**every member of every marked pod** from `g_MobyPods`, without looking at
+either field. A moby whose podmate belongs to the other dragon is pulled into
+both passes. The PS1 build had the same flaw; its ram trouble was probably
+this all along, not the `g_PadBackup` typo it was credited to.
 
-**Candidates, in order:**
+**Fix built 2026-09-13 (v0.3.0, not yet run in play).** Ownership is decided per
+pod group: membership is read from the `g_MobyPods` lists exactly as the
+builder reads them, pods linked by a moby naming a different pod are merged,
+and every member shares one owner, the dragon nearest any member, with the
+usual hysteresis. The readout shows how many mobys are in pods.
 
-1. **The camera runaway (A1).** The ram's own level code calls
-   camera functions directly (`func_level_20_8007E3A0` calls `func_800342F8`
-   and `func_80033F08`), so its behaviour and the camera are coupled.
-2. **Ownership flipping during its return.** The ram moves a long way between
-   the dragons on a charge, so it can cross the 25% hysteresis margin and be
-   updated against the other dragon mid-behaviour. PS1 established that a flip
-   in the middle of a reaction does real damage. Measure the ram's owner
-   changes before changing anything.
+**Also fixed 2026-09-13: the view-swap key reassigned every moby.** Ownership
+is stored per slot and the key trades slots, so each press handed every moby to
+the other physical dragon (1,374 changes in a session with 16 presses). It now
+swaps the owner values and the two Sparx.
 
 ### A3. Enemies seem to prefer player 1
 

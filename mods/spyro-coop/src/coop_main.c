@@ -101,7 +101,8 @@ void coop_publish_status(void) {
                      g_stats.moby_two_pass, g_stats.moby_single_pass, g_stats.moby_fns_hooked);
     coop_status("P2 Sparx spawns %u, body pushes %u, moby owner flips %u (switch at %d%% closer)",
                      g_stats.sparx_spawns, g_stats.pushes, g_stats.owner_flips, g_hysteresis);
-    coop_status("Camera focus per player: %s", g_focus_per_player ? "ON (fix)" : "OFF (old behaviour)");
+    coop_status("Mobys in pods (owned as a group): %u, pod merges %u", g_stats.pod_members, g_stats.pod_merges);
+    coop_status("Camera focus per player: %s", g_focus_per_player ? "on" : "off");
     for (int i = 0; i < 2; i++)
         coop_status("  P%d camera: on shared vector %u frames, runaway %u frames in %u events, max %u away",
                     i + 1, g_stats.cam_on_shared[i], g_stats.cam_runaway[i],
@@ -121,7 +122,7 @@ void coop_publish_status(void) {
         coop_log(OP_MOD_LOG_INFO,
                    "tick %u: ready=%u P1(%d,%d,%d) P2(%d,%d,%d) apart=%u | "
                    "p2ticks=%u p2cams=%u seeds=%u reseeds=%u deaths=%u handovers=%u "
-                   "teleports=%u swaps=%u draws=%u flames=%u flyin=%u | mobys 2p=%u 1p=%u fns=%u sparx=%u pushes=%u flips=%u | cam focus_pp=%d shared=%u/%u runaway=%u/%u events=%u/%u max=%u/%u | other tick=%u ra=0x%08X other cam=%u ra=0x%08X | "
+                   "teleports=%u swaps=%u draws=%u flames=%u flyin=%u | mobys 2p=%u 1p=%u fns=%u sparx=%u pushes=%u flips=%u pods=%u | cam focus_pp=%d shared=%u/%u runaway=%u/%u events=%u/%u max=%u/%u | other tick=%u ra=0x%08X other cam=%u ra=0x%08X | "
                    "guards probe=%u query=%u | padvsync=%u inswap=%u",
                    g_stats.camera_gameplay, A->ready,
                    p1[0], p1[1], p1[2], p2[0], p2[1], p2[2],
@@ -132,7 +133,7 @@ void coop_publish_status(void) {
                    g_stats.p2_draws, g_stats.p2_flame_draws, g_stats.flyin_draws,
                    g_stats.moby_two_pass, g_stats.moby_single_pass,
                    g_stats.moby_fns_hooked, g_stats.sparx_spawns, g_stats.pushes,
-                   g_stats.owner_flips, g_focus_per_player,
+                   g_stats.owner_flips, g_stats.pod_members, g_focus_per_player,
                    g_stats.cam_on_shared[0], g_stats.cam_on_shared[1],
                    g_stats.cam_runaway[0], g_stats.cam_runaway[1],
                    g_stats.cam_runaway_events[0], g_stats.cam_runaway_events[1],

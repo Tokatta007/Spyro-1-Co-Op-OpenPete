@@ -132,6 +132,8 @@ typedef struct {
     unsigned moby_two_pass, moby_single_pass, moby_fns_hooked;
     unsigned sparx_spawns, pushes;
     unsigned owner_flips;
+    unsigned pod_members;         /* mobys in a pod, last assignment */
+    unsigned pod_merges;          /* pods joined because a list crossed them */
     unsigned cam_on_shared[2];    /* frames each camera focused on D_80077798 */
     unsigned cam_runaway[2];      /* frames each camera was too far from its dragon */
     unsigned cam_runaway_events[2];

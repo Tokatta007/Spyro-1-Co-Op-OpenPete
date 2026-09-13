@@ -16,6 +16,17 @@
  *   3. unmask, swap player 2 in, mask player 1's, run it again.
  * Each moby updates exactly once per frame, seeing exactly one Spyro.
  *
+ * PODS, found 2026-09-13 and missed by the PS1 build. The list builder,
+ * func_80051FEC, does NOT only add drawn or in-range mobys. Every moby has a
+ * pod index (m_Pod, 0x43; 0x80 and up means none). Adding any moby marks its
+ * pod, and a second loop then adds EVERY member of every marked pod through
+ * g_MobyPods, ignoring m_WasDrawn and m_UpdateDistance entirely. So masking a
+ * moby does nothing if a podmate belongs to the other player: it is pulled
+ * into both passes and updated twice. Measured symptoms: a ram running at
+ * double speed, turning between the two dragons every frame, and (because a
+ * ram's code steers the camera it hits) camera runaways. Ownership is
+ * therefore decided per POD: every member shares one owner.
+ *
  * WHY THE OVERRIDE IS REGISTERED LATE. g_UpdateMoby points into the loaded
  * level's code, a different function per level, and every level's code loads
  * at the same address (0x8007AA38). So the address is read at runtime and an
@@ -89,6 +100,18 @@ static int64_t manhattan(const int32_t* a, const Vector3D* b) {
     return dx + dy + dz;
 }
 
+#define POD_COUNT 32                 /* func_80051FEC keeps 32 pod flags */
+#define POD_NONE(pod) ((pod) >= 0x80)  /* the builder tests the byte signed */
+
+/* One owner decision with hysteresis. prev 0 or 1 is sticky: switch only when
+   the other dragon is closer by the configured margin. Anything else (3 for a
+   fresh level, 2 for a revived dead slot) takes plain nearest. */
+static uint8_t decide_owner(uint8_t prev, int64_t d1, int64_t d2, int64_t keep) {
+    if (prev == 0) return (d2 * 100 < d1 * keep) ? 1 : 0;
+    if (prev == 1) return (d1 * 100 < d2 * keep) ? 0 : 1;
+    return (d2 < d1) ? 1 : 0;
+}
+
 static unsigned assign_mobys(CoopMobyArena* M, CoopArena* A,
                              Moby* mobys, uint32_t mobys_vaddr) {
     const int32_t* p1 = guest32(OP_GADDR_g_Spyro + SPYRO_OFF_POSITION);
@@ -98,7 +121,7 @@ static unsigned assign_mobys(CoopMobyArena* M, CoopArena* A,
 
     /* A new level gets a fresh table, so every moby starts with its truly
        nearest dragon instead of inheriting player 1 (BUGS.md A3). 3 means
-       "unassigned" and falls through to plain nearest below. */
+       "unassigned" and falls through to plain nearest. */
     CoopExtraArena* X = coop_extra_arena();
     if (X->owner_level != coop_level_id()) {
         memset(M->owner, 3, sizeof M->owner);
@@ -110,33 +133,117 @@ static unsigned assign_mobys(CoopMobyArena* M, CoopArena* A,
        ownership more often, which PS1 found harmful mid-reaction (BUGS.md A2). */
     int64_t keep = 100 - coop_hysteresis_percent();
 
+    /* ---- which pod group each moby belongs to ----
+       The builder MARKS a pod from a moby's m_Pod, then ADDS every index in
+       that pod's g_MobyPods list (a list of shorts, low 15 bits the moby
+       index, sign bit on the last entry). Membership is read from those lists
+       exactly as the builder reads them, and pods linked by a moby whose m_Pod
+       names a different pod are merged, so no group can be split. */
+    int pod_of[MOBY_MAX];
+    uint8_t pod_parent[POD_COUNT];
+    uint8_t pod_marked[POD_COUNT];
+    for (int p = 0; p < POD_COUNT; p++) { pod_parent[p] = (uint8_t)p; pod_marked[p] = 0; }
+
     for (n = 0; n < MOBY_MAX; n++) {
         int8_t state = (int8_t)mobys[n].m_State;
         if (state == -1)
             break;                           /* the real end of the array */
-        if (state < 0) {
-            M->owner[n] = 2;                 /* dead slot: never masked */
-            continue;
-        }
-        uint32_t addr = mobys_vaddr + n * sizeof(Moby);
-        if (addr == sparx1) {
-            M->owner[n] = 0;
-        } else if (M->p2_sparx != 0 && addr == M->p2_sparx) {
-            M->owner[n] = 1;
-        } else {
-            int64_t d1 = manhattan(p1, &mobys[n].m_Position);
-            int64_t d2 = manhattan(p2, &mobys[n].m_Position);
-            uint8_t prev = M->owner[n];
-            if (prev == 0)
-                M->owner[n] = (d2 * 100 < d1 * keep) ? 1 : 0;
-            else if (prev == 1)
-                M->owner[n] = (d1 * 100 < d2 * keep) ? 0 : 1;
-            else
-                M->owner[n] = (d2 < d1) ? 1 : 0;
-            if (prev <= 1 && M->owner[n] != prev)
-                g_stats.owner_flips++;
+        pod_of[n] = -1;
+        if (state >= 0 && !POD_NONE(mobys[n].m_Pod) && mobys[n].m_Pod < POD_COUNT) {
+            pod_of[n] = mobys[n].m_Pod;
+            pod_marked[mobys[n].m_Pod] = 1;
         }
     }
+
+    uint32_t pods_vaddr = *(uint32_t*)g_api->guest(OP_GADDR_g_MobyPods);
+    uint32_t* pod_lists = pods_vaddr ? (uint32_t*)g_api->guest(pods_vaddr) : NULL;
+    for (int p = 0; pod_lists && p < POD_COUNT; p++) {
+        if (!pod_marked[p] || pod_lists[p] == 0)
+            continue;                        /* a pod no moby can mark is never walked */
+        int16_t* e = (int16_t*)g_api->guest(pod_lists[p]);
+        for (unsigned k = 0; e && k < MOBY_MAX; k++) {
+            int16_t raw = e[k];
+            unsigned idx = (unsigned)(raw & 0x7FFF);
+            if (idx < n && (int8_t)mobys[idx].m_State >= 0) {
+                if (pod_of[idx] < 0) {
+                    pod_of[idx] = p;         /* in the list without naming the pod */
+                } else if (pod_of[idx] != p) {
+                    /* union the two pods */
+                    int a = p, b = pod_of[idx];
+                    while (pod_parent[a] != a) a = pod_parent[a];
+                    while (pod_parent[b] != b) b = pod_parent[b];
+                    if (a != b) { pod_parent[b] = (uint8_t)a; g_stats.pod_merges++; }
+                }
+            }
+            if (raw < 0)
+                break;                       /* sign bit: last entry */
+        }
+    }
+    for (unsigned i = 0; i < n; i++) {
+        if (pod_of[i] >= 0) {
+            int r = pod_of[i];
+            while (pod_parent[r] != r) r = pod_parent[r];
+            pod_of[i] = r;
+        }
+    }
+
+    /* ---- each group's nearest member to each dragon ---- */
+    int64_t  pod_d1[POD_COUNT], pod_d2[POD_COUNT];
+    int      pod_first[POD_COUNT];
+    for (int p = 0; p < POD_COUNT; p++) {
+        pod_d1[p] = pod_d2[p] = INT64_MAX;
+        pod_first[p] = -1;
+    }
+    for (unsigned i = 0; i < n; i++) {
+        if (pod_of[i] < 0)
+            continue;
+        int p = pod_of[i];
+        int64_t d1 = manhattan(p1, &mobys[i].m_Position);
+        int64_t d2 = manhattan(p2, &mobys[i].m_Position);
+        if (d1 < pod_d1[p]) pod_d1[p] = d1;
+        if (d2 < pod_d2[p]) pod_d2[p] = d2;
+        if (pod_first[p] < 0) pod_first[p] = (int)i;
+    }
+
+    /* ---- one owner per group, sticky through its first member's last
+       owner: every member shares an owner after this, so that value IS the
+       group's previous owner. ---- */
+    uint8_t pod_owner[POD_COUNT];
+    for (int p = 0; p < POD_COUNT; p++) {
+        if (pod_first[p] < 0)
+            continue;
+        pod_owner[p] = decide_owner(M->owner[pod_first[p]], pod_d1[p], pod_d2[p], keep);
+    }
+
+    /* ---- assign every moby ---- */
+    unsigned pod_members = 0;
+    for (unsigned i = 0; i < n; i++) {
+        int8_t state = (int8_t)mobys[i].m_State;
+        if (state < 0) {
+            M->owner[i] = 2;                 /* dead slot: never masked */
+            continue;
+        }
+        uint8_t prev = M->owner[i];
+        uint32_t addr = mobys_vaddr + i * sizeof(Moby);
+
+        if (pod_of[i] >= 0) {
+            /* The group's owner wins, even for a Sparx: the builder would pull
+               a split group into both passes whatever we decide per moby. */
+            M->owner[i] = pod_owner[pod_of[i]];
+            pod_members++;
+        } else if (addr == sparx1) {
+            M->owner[i] = 0;
+        } else if (M->p2_sparx != 0 && addr == M->p2_sparx) {
+            M->owner[i] = 1;
+        } else {
+            M->owner[i] = decide_owner(prev,
+                                       manhattan(p1, &mobys[i].m_Position),
+                                       manhattan(p2, &mobys[i].m_Position), keep);
+        }
+        if (prev <= 1 && M->owner[i] != prev)
+            g_stats.owner_flips++;
+    }
+    g_stats.pod_members = pod_members;
     return n;
 }
 
