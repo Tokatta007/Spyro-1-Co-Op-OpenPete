@@ -30,6 +30,7 @@ The goal is **four-player split-screen**.
 ```
 mods/spyro-coop/   the mod: manifest and source
 docs/PORTING.md    the plan, the blockers, and what each depends on
+BUGS.md            what is wrong, what is missing, what is accepted
 ```
 
 ## Credits
