@@ -212,9 +212,35 @@ void coop_resample_teleport(void) {
         resample_teleport(coop_arena());
 }
 
+/* PLAYER 2 KEEPS HIS OWN HEALTH ACROSS A LEVEL CHANGE. Seeding copies all of
+   player 1's state into player 2, health included, and Sparx takes its colour
+   from health. So on entering a level player 2's Sparx showed player 1's
+   health (seen 2026-09-13 in Dark Hollow). Retail carries health between
+   levels, so a level change remembers his before he is stood down, and the
+   seed puts it back. A death forgets it: the stock respawn gives both full
+   health, and a separate respawn never reseeds. */
+static void carry_p2_health(CoopArena* A, int he_is_live) {
+    CoopExtraArena* X = coop_extra_arena();
+    X->p2_health_carry[0] = 1;
+    X->p2_health_carry[1] = he_is_live
+        ? *guest32(OP_GADDR_g_Spyro + SPYRO_OFF_HEALTH)
+        : *(int32_t*)(A->spyro + SPYRO_OFF_HEALTH);
+}
+
+static void forget_p2_health(void) {
+    coop_extra_arena()->p2_health_carry[0] = 0;
+}
+
 /* Copy player 1 into player 2, then step him out to the side. */
 static void seed_player2(CoopArena* A) {
     walk(k_spyro_regions, COUNT(k_spyro_regions), A->spyro, 0);
+    {
+        CoopExtraArena* X = coop_extra_arena();
+        if (X->p2_health_carry[0]) {
+            *(int32_t*)(A->spyro + SPYRO_OFF_HEALTH) = X->p2_health_carry[1];
+            X->p2_health_carry[0] = 0;
+        }
+    }
     memcpy(A->camera, guest8(OP_GADDR_g_Camera), CAMERA_STRUCT_BYTES);
     for (unsigned i = 0; i < CAMERA_EXTRA_COUNT; i++)
         A->camera_extra[i] = *guest32(k_camera_extra[i]);  /* or he starts with garbage */
@@ -282,6 +308,10 @@ static void handover_resume(CoopArena* A) {
         int32_t seq = A->last_seq;
         A->last_seq = 0;
         if (seq != 8 && seq != 11 && seq != 12) {
+            if (seq == 4 || seq == 5)
+                forget_p2_health();          /* a stock respawn: full health for both */
+            else
+                carry_p2_health(A, 0);
             A->handover = 0;
             A->ready    = 0;
             g_stats.teleports++;
@@ -293,6 +323,7 @@ static void handover_resume(CoopArena* A) {
         return;
 
     if (A->last_level != level_id()) {
+        carry_p2_health(A, 1);               /* identities crossed: he is live */
         A->ready = 0;
     } else {
         swap_spyro(A);
@@ -422,6 +453,7 @@ static void on_spyro_tick(CPUState* cpu) {
     int32_t gs = gamestate();
     if (gs == 4 || gs == 5) {
         A->ready = 0;                                  /* death: both respawn */
+        forget_p2_health();
         g_stats.deaths++;
         return;
     }
@@ -434,6 +466,7 @@ static void on_spyro_tick(CPUState* cpu) {
         return;
     }
     if (A->last_level != level_id()) {
+        carry_p2_health(A, 0);
         A->ready = 0;                                  /* reseed next frame */
         g_stats.level_reseeds++;
         return;
@@ -481,6 +514,7 @@ static void on_spyro_tick(CPUState* cpu) {
         int32_t g2 = gamestate();
         if (g2 == 4 || g2 == 5) {
             A->ready = 0;
+            forget_p2_health();
             g_stats.deaths++;
         } else {
             A->handover = 1;

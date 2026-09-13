@@ -246,7 +246,7 @@ static void p2_sparx_keep(CPUState* cpu, CoopMobyArena* M) {
        dragon with no health has no Sparx in retail: respawning one would only
        lose it again, and burn the spawn cap doing so. */
     if (M->p2_sparx == 0 && sparx1 != 0 &&
-        *guest32(OP_GADDR_g_Spyro + 0x164) > 0) {
+        *guest32(OP_GADDR_g_Spyro + SPYRO_OFF_HEALTH) > 0) {
         if (M->sparx_spawns_level >= SPARX_SPAWN_CAP_PER_LEVEL) {
             if (M->sparx_spawns_level == SPARX_SPAWN_CAP_PER_LEVEL) {
                 M->sparx_spawns_level++;     /* log once */
@@ -463,6 +463,7 @@ int coop_mobys_p2_pass(CPUState* cpu) {
            the sequence has its player, exactly as the tick does. */
         if (gs == 4 || gs == 5) {
             A->ready = 0;
+            coop_extra_arena()->p2_health_carry[0] = 0;
             g_stats.deaths++;
         } else {
             A->handover = 1;

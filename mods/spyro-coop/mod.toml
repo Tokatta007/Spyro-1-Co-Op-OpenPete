@@ -22,7 +22,7 @@
 [mod]
 id      = "spyro-coop"
 name    = "Spyro Co-Op"
-version = "0.4.1"
+version = "0.4.2"
 game    = "spyro-1"
 api     = 1
 

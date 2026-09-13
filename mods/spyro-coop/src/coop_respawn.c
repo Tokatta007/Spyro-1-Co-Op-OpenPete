@@ -35,7 +35,6 @@
 #define SPYRO_OFF_BODYROT_Z   0x00E
 #define SPYRO_OFF_IDLE_TIMER  0x080
 #define SPYRO_OFF_INVULN      0x160
-#define SPYRO_OFF_HEALTH      0x164
 
 /* CheckpointData (checkpoint.h). */
 #define CHECKPOINT_OFF_STOOD  0x00  /* int: a checkpoint has been stood on */

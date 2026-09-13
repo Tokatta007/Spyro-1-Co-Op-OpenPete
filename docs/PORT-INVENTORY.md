@@ -452,3 +452,16 @@ savestates stay loadable.
 
 A ram can still hesitate when both dragons are near it after a charge. It
 attacks eventually and is hard to reproduce. `BUGS.md` X3.
+
+---
+
+## 10. Confirmed 2026-09-13: the list filter (v0.4.1)
+
+The moby passes moved from masking plus an override on level code to a filter
+on `func_80051FEC`'s update list, with every hook in the main executable
+(`coop_mobys.c` header). User: enemy behaviour fine, "maybe even better". Log:
+**0 engine errors** (74,705 the session before), **0 collision guard
+refusals** (826 before, so that burst was a side effect of the engine
+bypassing the misplaced hook), 519,609 list entries dropped by the filter, and
+player 2's Sparx spawned in each of four levels visited.
+

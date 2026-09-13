@@ -45,6 +45,7 @@ extern openpete_mod_t*           g_self;
 #define SPYRO_OFF_YAW          0x11C  /* heading, 0x1000 per full turn */
 #define SPYRO_OFF_SCRIPT_FOCUS 0x21C  /* pointer func_8003FE40 copies into
                                          g_Camera.m_Focus unchecked */
+#define SPYRO_OFF_HEALTH       0x164  /* int m_health: 3 green ... 0 no Sparx */
 
 /* Camera struct offsets, from the decompilation's camera.h (two 20-byte
    SHORTMATRIX fields come first). */
@@ -113,11 +114,12 @@ typedef struct {
  * A third allocation, appended for the same ledger reason as CoopMobyArena.
  * ---------------------------------------------------------------------- */
 typedef struct {
-    /* UNUSED since 2026-09-13. Held player 2's copy of D_80077798 for a
-       camera fix that was tested and ruled out (the camera bug was the pod
-       rule; see coop_mobys.c). Kept so the block's size, and therefore
-       savestates made with v0.3.0, stay valid. Reuse it rather than resize. */
-    int32_t unused_was_p2_focus_vector[3];
+    /* Player 2's health, carried across a level change (coop_players.c).
+       [0] is set when a carry is pending, [1] is the health. These three
+       ints were a ruled-out camera experiment's vector; reused rather than
+       resized so savestates made since v0.3.0 stay valid. */
+    int32_t p2_health_carry[2];
+    int32_t unused;
     int32_t owner_level;      /* level the moby owner table belongs to */
 } CoopExtraArena;
 
@@ -147,6 +149,7 @@ typedef struct {
     unsigned sparx_spawns, pushes;
     unsigned owner_flips;
     unsigned individual_respawns, double_deaths, sparx_heals;
+    unsigned sounds_nearer_p2;    /* voices measured from player 2's camera */
     unsigned pod_members;         /* mobys in a pod, last assignment */
     unsigned pod_merges;          /* pods joined because a list crossed them */
     unsigned cam_on_shared[2];    /* frames each camera focused on D_80077798 */
@@ -200,6 +203,9 @@ int  coop_draw_install(void);  /* gameplay draw and portal fly-in */
 
 /* coop_gates.c */
 int  coop_gates_install(void);
+
+/* coop_sound.c */
+int  coop_sound_install(void);
 
 /* coop_pad.c */
 int  coop_pad_install(void);

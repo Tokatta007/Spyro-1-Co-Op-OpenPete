@@ -107,6 +107,7 @@ void coop_publish_status(void) {
     coop_status("P2 Sparx spawns %u, body pushes %u, moby owner flips %u (switch at %d%% closer)",
                      g_stats.sparx_spawns, g_stats.pushes, g_stats.owner_flips, g_hysteresis);
     coop_status("Mobys in pods (owned as a group): %u, pod merges %u", g_stats.pod_members, g_stats.pod_merges);
+    coop_status("Sounds measured from player 2's camera: %u", g_stats.sounds_nearer_p2);
     coop_status("Respawn style: %s; separate respawns %u, double deaths %u, Sparx heals %u",
                 g_respawn_enabled ? "modern" : "original", g_stats.individual_respawns,
                 g_stats.double_deaths, g_stats.sparx_heals);
@@ -209,7 +210,8 @@ int openpete_mod_entry(const openpete_mod_api_t* api, openpete_mod_t* self) {
 
     if (coop_players_install() != 0 || coop_draw_install() != 0 ||
         coop_gates_install() != 0 || coop_pad_install() != 0 ||
-        coop_respawn_install() != 0 || coop_mobys_install() != 0)
+        coop_respawn_install() != 0 || coop_mobys_install() != 0 ||
+        coop_sound_install() != 0)
         return 1;
     api->register_toggle_hook(self, on_toggle);
 

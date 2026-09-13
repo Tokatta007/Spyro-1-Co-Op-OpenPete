@@ -39,6 +39,19 @@ cannot be on one screen.
 
 ## 2. Missing, planned
 
+### M3. Sounds from player 2's side: BUILT in v0.4.2, awaiting test
+
+`coop_sound.c`, from `Sp1x2SoundListenerDistance`: a 3D sound's distance is
+the nearer of the two cameras, so enemies and pickups near player 2 are heard.
+The readout counts voices measured from player 2's camera.
+
+### M4. Player 2's health across levels: BUILT in v0.4.2, awaiting test
+
+Seen 2026-09-13 in Dark Hollow: player 2 arrived with player 1's Sparx colour,
+because seeding copies player 1's whole state, health included. Player 2 now
+keeps his own health through a level change. A death still gives both full
+health.
+
 ### M1. Player 2 in the portal fly-in and exit: WORKS
 
 Confirmed by the user 2026-09-13. `coop_draw.c`, `on_spyro_model`: the level
@@ -66,31 +79,6 @@ or *original* (every death reloads both, as retail).
 the pedestal let the fairy talk at once. The mute named a player slot, which
 the key trades; it now moves with the dragon, like moby ownership and Sparx.
 
-### A4. Engine errors from hooking level code: FIXED in v0.4.1, awaiting test
-
-The v0.4.0 session log held **74,705** lines of `override frame stack overflow
-at 0x8007DA78`, from the moment the game returned from level 11 to level 10.
-The mod had overridden level 11's moby megafunction at that address, and in
-level 10 the same address holds other code that is entered repeatedly, each
-entry nesting through the override until the engine gave up and bypassed it.
-Harmless to play, but about 680 errors a second.
-
-The moby passes no longer hook level code at all. Player 1's pass is the
-game's own megafunction call, with the update list filtered as soon as the
-main-executable builder `func_80051FEC` writes it; player 2's pass runs at
-the start of Spyro's tick. Every hook is now on main-executable code, and the
-engine's "raw-tier addresses" warning is gone with it. See the header of
-`coop_mobys.c`. **Retest the ram, Sparx and nearest-player enemies**, since
-this replaces the mechanism under all three.
-
-### A5. Collision guards refusing coordinates again
-
-The same v0.4.0 session logged **826** probe refusals, after sessions of zero.
-Each is an impossible coordinate a collision routine was asked to use, and
-averted. Possibly related to A4, since much of the session ran with the engine
-bypassing hooks. v0.4.1 logs the first five refusals of each kind with the
-coordinates, the caller and the level.
-
 ---
 
 ## 3. Accepted for now
@@ -108,6 +96,21 @@ has already charged once and is returning to its spot, or turning in place, it
 can hesitate before attacking again. It does attack eventually, and it is hard
 to reproduce. Likely its pod changing owner as the two distances cross the
 switch margin. Accepted by the user as not worth chasing for now.
+
+### X4. The two dragons overlap on the portal loading screen when entering a level
+
+Seen 2026-09-13: in the level transition tunnel, when entering a level (and
+perhaps only the first time), one dragon's wings pass through the other's.
+Not seen when returning home. Noted as a callout.
+
+**Two candidates, not yet measured.** The wingman is placed 640 units along
+the wing line computed from Spyro's physics yaw (`g_Spyro + 0x11C`). Either the
+flying pose's wingspan is wider than 640, or that yaw does not match the
+orientation the dragon is drawn with during this sequence, which would put the
+wingman partly in front or behind instead of beside. The body rotation byte
+(`g_Spyro + 0x0E`) is what the model is drawn with, and would settle the
+second. A wider gap only in gamestate 1 would fix the first without changing
+the spacing when play begins.
 
 ### X2. Player 2 copies player 1's controls
 
