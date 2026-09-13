@@ -179,6 +179,61 @@ int coop_draw_install(void) {
 #define FLAME_OFF_MATRIX 0xB8  /* g_SpyroFlame running orientation matrix */
 #define FLAME_MATRIX_INTS 5
 
+/* THE TUNNEL IS STAGED, SO "BESIDE" MEANS BESIDE ON SCREEN (2026-09-13).
+ *
+ * In the level transition (gamestate 1) the game parks Spyro and orbits the
+ * camera around him while the background scrolls. The wing-line offset makes
+ * a rigid formation that turns with him, which is right wherever there is
+ * ground to judge it against. Here there is none, and whenever the orbit
+ * looks at him side-on his wing line points along the view, so the wingman
+ * sits behind him: the user's screenshots showed the two dragons stacked, one
+ * behind and below the other, and a wider gap only made it worse.
+ *
+ * So in the tunnel only, the wingman goes along the horizontal direction
+ * square to the camera's view. The PS1 build tried this and rejected it
+ * because the wingman slid around the dragon as the camera orbited; with no
+ * scenery in the tunnel that slide is invisible, and what the player sees is
+ * two dragons flying side by side the whole way. It also extends to a row of
+ * four. The landing and the level exit keep the wing line: they have ground,
+ * and the landing has to match where play begins. */
+static void tunnel_offset(int32_t out[3]) {
+    const int32_t* cam = guest32(OP_GADDR_g_Camera + CAMERA_OFF_POSITION);
+    const int32_t* me  = guest32(OP_GADDR_g_Spyro + SPYRO_OFF_POSITION);
+    int64_t vx = (int64_t)me[0] - cam[0];
+    int64_t vy = (int64_t)me[1] - cam[1];
+    int64_t len = isqrt64((uint64_t)(vx * vx + vy * vy));
+    if (len == 0) {
+        coop_formation_offset(out);          /* camera straight above: no "side" */
+        return;
+    }
+    out[0] = (int32_t)(vy * P2_START_OFFSET / len);
+    out[1] = (int32_t)(-vx * P2_START_OFFSET / len);
+    out[2] = 0;
+}
+
+/* DRAGON SCENE DIAGNOSTIC (2026-09-13). In a rescued dragon's dialogue Spyro
+ * showed his own purple although his colour is written before every model
+ * draw and kept in state every frame. The retail renderer applies the filter
+ * on every path through it, so either the dialogue draws him some other way
+ * or OpenPete treats that draw differently. Log each distinct call site of the
+ * model renderer seen in gamestate 8, with the filter going in and the GTE far
+ * colour coming out. A site missing from the log during the dialogue means
+ * Spyro is not drawn by this renderer there. */
+static uint32_t g_scene_sites[12];
+static unsigned g_scene_sites_n;
+
+static void dragon_scene_diag(CPUState* cpu, uint32_t ra, uint32_t filter_in) {
+    for (unsigned i = 0; i < g_scene_sites_n; i++)
+        if (g_scene_sites[i] == ra)
+            return;
+    if (g_scene_sites_n == sizeof g_scene_sites / sizeof g_scene_sites[0])
+        return;
+    g_scene_sites[g_scene_sites_n++] = ra;
+    coop_log(OP_MOD_LOG_INFO,
+             "dragon scene: Spyro model drawn from ra 0x%08X, filter in %08X, far colour out %03X %03X %03X",
+             ra, filter_in, cpu->gte_ctrl[21], cpu->gte_ctrl[22], cpu->gte_ctrl[23]);
+}
+
 static void on_spyro_model(CPUState* cpu) {
     if (g_in_extra_draw) {
         g_api->base(cpu);                    /* a call we made: colour already set */
@@ -199,7 +254,11 @@ static void on_spyro_model(CPUState* cpu) {
 
     if ((cpu->ra != RA_FLYIN_MODEL && cpu->ra != RA_FLYOUT_MODEL) ||
         !coop_enabled() || !coop_draw_enabled()) {
+        uint32_t ra = cpu->ra;
+        uint32_t filter_in = *(uint32_t*)g_api->guest(OP_GADDR_g_Spyro + SPYRO_OFF_COLOR_FILTER);
         g_api->base(cpu);
+        if (coop_gamestate() == 8)
+            dragon_scene_diag(cpu, ra, filter_in);
         return;
     }
 
@@ -219,7 +278,10 @@ static void on_spyro_model(CPUState* cpu) {
     memcpy(saved_mtx, mtx, sizeof saved_mtx);
     memcpy(saved_filter, filter, 4);
 
-    coop_formation_offset(right);
+    if (coop_gamestate() == 1)
+        tunnel_offset(right);
+    else
+        coop_formation_offset(right);
     pos[0] += right[0];
     pos[1] += right[1];
     pos[2] += right[2];

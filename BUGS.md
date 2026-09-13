@@ -80,32 +80,22 @@ now answers which person is in each slot, from the view-key state and the
 handover flag. Known gap: if player 2 dies in a way that runs the stock death
 sequence, the death animation still shows player 1's colour.
 
-### C2. The portal wingman shows player 1's colour: CAUSE MEASURED, fix built in v0.5.2
+### C2. The portal wingman's colour: FIXED in v0.5.2
 
-The v0.5.1 diagnostic logged, in one portal flight, the lead drawn with a red
-filter and the retail renderer's GTE far colour red, then the wingman with a
-green filter and far colour green. The user saw two green dragons. So the
-retail renderer honoured both colours and **OpenPete's native rebuild of
-Spyro takes one colour per call of the model renderer: the last dragon drawn
-inside that call.** The wingman was drawn by calling `base()` a second time
-inside the lead's call.
+Confirmed by the user 2026-09-13: two different colours through the portal,
+the camera's dragon keeps its own colour with interpolation on, and colours
+follow their dragons across the view key. Cause and fix: OpenPete's native
+rebuild of Spyro takes one colour per renderer call, from the last dragon drawn
+in it, so every extra dragon is its own call, drawn before the camera's dragon.
 
-The same rule explains a second observation: with interpolation on, the
-camera's dragon showed player 2's colour, and switching interpolation off
-turned it back and revealed player 2. The in-between frames show one dragon,
-coloured like the last Spyro draw of the frame, which was player 2's.
+### C3. Spyro is purple in a dragon's dialogue: diagnosing
 
-**v0.5.2:** every extra dragon is its own renderer call, drawn before the
-dragon the camera follows, which is then always last. In gameplay player 2 is
-now drawn ahead of player 1 from the composer's model call.
-
-### C3. Spyro turns purple during a dragon's dialogue: fix built in v0.5.2
-
-Seen 2026-09-13: after the hatching animation Spyro shows his own colour for the
-conversation, then his chosen colour again afterwards. The game clears the
-filter's strength on state changes (`ChangeSpyroState`), and the tint was only
-written immediately before each draw. v0.5.2 also keeps both dragons' colour
-in game state every frame, in every gamestate.
+v0.5.2 fixed the walk into position, but the user still sees Spyro's own
+purple in the conversation itself, and his colour again afterwards. The retail
+renderer applies the filter on every path through it, so either the dialogue
+draws him some other way or OpenPete treats that draw differently. v0.5.3 logs
+each distinct call site of the model renderer during gamestate 8, with the
+filter going in and the far colour coming out.
 
 ### M3. Sounds from player 2's side: BUILT in v0.4.2, awaiting test
 
@@ -165,15 +155,25 @@ can hesitate before attacking again. It does attack eventually, and it is hard
 to reproduce. Likely its pod changing owner as the two distances cross the
 switch margin. Accepted by the user as not worth chasing for now.
 
-### X4. Dragons overlapping on the portal screens: spacing raised to 1,024 in v0.5.2
+### X4. Dragons stacked on the portal screen when entering a level: new approach in v0.5.3
 
-Seen 2026-09-13. The PS1 build used 640 (`SP1X2_P2_START_OFFSET` 0x280), and the
-units are identical on OpenPete, which runs the original game logic. v0.5.1
-widened only the tunnel flight (gamestate 1); the user still saw overlap
-entering a level, which matches the entrance landing (gamestate 9) still at
-640, and none leaving a level, which has no landing. v0.5.2 uses 1,024 for the
-seed and every sequence alike, so the dragons never change spacing between
-one and the next.
+Screenshots 2026-09-13, all on the "Entering Stone Hill" transition: the
+wingman sits behind and below the leader, and widening the gap to 1,024 made
+it look worse. Leaving a level looks fine.
+
+**Cause, from the PS1 notes.** The transition is staged: Spyro is parked and
+the camera orbits him. The wingman went along Spyro's wing line, a rigid
+formation that turns with him. Whenever the orbit views him side-on, that
+line points along the view, so the wingman lines up behind him. The PS1 build
+had the same geometry; it only made the nearer dragon draw over the farther
+one (no depth buffer there), which hides the flicker but not the stacking.
+
+**v0.5.3:** in the transition only, the wingman goes along the horizontal
+direction square to the camera's view, so he is always beside the leader on
+screen. PS1 tried and rejected this for sliding around the dragon as the camera
+orbits; in the tunnel there is no scenery to show that. The landing and the
+level exit keep the wing line, since they have ground and the landing must
+match where play starts. This also extends naturally to a row of four.
 
 ### X2. Player 2 copies player 1's controls
 
