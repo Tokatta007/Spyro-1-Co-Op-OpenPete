@@ -85,9 +85,19 @@ Checked headless 2026-09-13 with screenshots (`--skip-to-level artisans` and a
 scripted movie): the list with five rows and a grown box, the shimmer on
 MULTIPLAYER, both pages, a value change, backing out, and moving past
 MULTIPLAYER in both directions. The EXIT LEVEL variant confirmed by the user;
-the flight-level QUIT variant not yet seen. Two looks differ between the renderers: the grey
-"disabled" shade shows pale purple in the native renderer, and the swatch
-borders draw only in PsyCross.
+the flight-level QUIT variant not yet seen. The grey "disabled" shade shows pale purple in the
+native renderer; the user is fine with it.
+
+**Fixed in v0.6.2, at the user's report:** text was centred on
+length x spacing, but the builder positions letter CENTRES, moves a space on by
+three quarters, and moves the first letter (and any after a digit or space) on
+by the size; lines sat half a letter left, and lines with spaces further. And
+in a wide window the native renderer stretches a plain flat quad over the whole
+window while the text, box and lines stay in the centred 4:3 area, so the
+swatches slid out of their frames on an ultrawide screen. Their corners are now
+squeezed by that stretch, from the window aspect the present hook reports.
+Gradient quads and TILE sprites were tried as swatches and do not draw in the
+native pause view at all.
 
 ### C1. Colour follows the slot, not the dragon: FIXED in v0.5.1, awaiting test
 

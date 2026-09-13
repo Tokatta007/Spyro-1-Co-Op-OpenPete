@@ -145,8 +145,30 @@ static Built text(CPUState* cpu, const char* s, int x, int y, int z, int advance
     return b;
 }
 
+/* How far the last letter's centre lies from the first's, by the builder's own
+   rules (func_800181AC, read from the disassembly): a letter's position is its
+   CENTRE; a space moves on three quarters of the spacing; and the first
+   letter, a letter after a space or a digit, and ! or ? move on by the SIZE
+   instead of the spacing. Centring on len * spacing, as before, put every line
+   half a letter left and lines with spaces further still. */
+static int text_span(const char* s, int advance, int size) {
+    int x = 0, last = 0, wide = 1;
+    for (; *s; s++) {
+        if (*s == ' ') {
+            int v = advance * 3;
+            x += (v < 0 ? v + 3 : v) >> 2;
+            wide = 1;
+            continue;
+        }
+        last = x;
+        x += (wide || *s == '!' || *s == '?') ? size : advance;
+        wide = (*s >= '0' && *s <= '9');
+    }
+    return last;
+}
+
 static Built text_centred(CPUState* cpu, const char* s, int cx, int y, int shade) {
-    return text(cpu, s, cx - (int)strlen(s) * 15 / 2, y, 0x1400, 15, 16, shade);
+    return text(cpu, s, cx - text_span(s, 15, 16) / 2, y, 0x1400, 15, 16, shade);
 }
 
 static void box_line(CPUState* cpu, int x0, int y0, int x1, int y1) {
@@ -345,7 +367,7 @@ static void on_pause_update(CPUState* cpu) {
 
 static void hint(CPUState* cpu, const char* s) {
     /* Narrower spacing so a long line fits under the box, as on PS1. */
-    text(cpu, s, 256 - (int)strlen(s) * 12 / 2, 206, 0x1100, 12, 13, SHADE_NORMAL);
+    text(cpu, s, 256 - text_span(s, 12, 13) / 2, 206, 0x1100, 12, 13, SHADE_NORMAL);
 }
 
 static void draw_multiplayer(CPUState* cpu) {
@@ -388,6 +410,25 @@ static const int k_col_x[COOP_MAX_PLAYERS] = { 216, 280, 344, 408 };
 
 static const uint8_t k_swatch_base[3] = { 0x78, 0x58, 0xA8 };   /* his skin, roughly */
 
+/* The window's width over its height, from the present hook. Host state and
+   display-only: it moves where a swatch quad is drawn and nothing else. */
+static volatile float g_window_aspect;
+
+static void on_present(const openpete_present_ctx_t* ctx) {
+    g_window_aspect = ctx->aspect;
+}
+
+/* The native view stretches a flat quad by (window aspect) / (the 4:3 area's
+   aspect). That area is 4:3 over 224 of the 240 lines, so its own aspect is
+   4/3 * 240/224; the measured stretch at 21:9 (window 1120x448) was 1.75,
+   which this gives. A window narrower than that area shows no stretch. */
+static int squeeze_x(int x) {
+    float k = g_window_aspect / (4.0f / 3.0f * 240.0f / 224.0f);
+    if (!(k > 1.0f))
+        return x;
+    return 256 + (int)((float)(x - 256) / k);
+}
+
 /* A flat quad showing what the tint does to him: Spyro's colour blended
    toward the chosen one by the strength, the way the filter blends. The PS1
    build's answer to the preview dragons that never drew. A player who is not
@@ -399,16 +440,25 @@ static void swatch(CPUState* cpu, int player, int cx) {
     int x0 = cx - SWATCH_HALF_W, x1 = cx + SWATCH_HALF_W;
     int active = player < g_settings.players;
 
+    uint8_t rgb[3];
+    for (int i = 0; i < 3; i++) {
+        int v = k_swatch_base[i] + ((c[i] - k_swatch_base[i]) * c[3]) / 255;
+        rgb[i] = (uint8_t)(active ? v : v / 3);
+    }
+    /* THE QUAD IS SQUEEZED, THE FRAME IS NOT. In a wide window the native
+       renderer places this quad as if the 512-wide screen were stretched over
+       the whole window, while the frame's lines, the box and the text stay in
+       the centred 4:3 area (measured at 21:9, 2026-09-13: the quad's corners
+       landed at x * width / 512). So its corners are pulled toward the centre
+       by that stretch, and it lands inside its frame at any window shape. */
+    int qx0 = squeeze_x(x0), qx1 = squeeze_x(x1);
     memset(p, 0, 24);
     uint32_t tag = 0x05000000u;
     memcpy(p, &tag, 4);
-    for (int i = 0; i < 3; i++) {
-        int v = k_swatch_base[i] + ((c[i] - k_swatch_base[i]) * c[3]) / 255;
-        p[4 + i] = (uint8_t)(active ? v : v / 3);
-    }
+    memcpy(p + 4, rgb, 3);
     p[7] = 0x28;                             /* POLY_F4, opaque */
-    int16_t xy[8] = { (int16_t)x0, SWATCH_TOP,    (int16_t)x1, SWATCH_TOP,
-                      (int16_t)x0, SWATCH_BOTTOM, (int16_t)x1, SWATCH_BOTTOM };
+    int16_t xy[8] = { (int16_t)qx0, SWATCH_TOP,    (int16_t)qx1, SWATCH_TOP,
+                      (int16_t)qx0, SWATCH_BOTTOM, (int16_t)qx1, SWATCH_BOTTOM };
     memcpy(p + 8, xy, sizeof xy);
 
     cpu->a0 = f4;
@@ -620,7 +670,8 @@ int coop_menu_install(uint32_t menu_vaddr) {
         g_api->override_name(g_self, "func_800181AC", on_text_sprites) != 0 ||
         g_api->override_name(g_self, "func_80017FE4", on_title) != 0 ||
         g_api->override_name(g_self, "func_8001844C", on_box_line) != 0 ||
-        g_api->override_name(g_self, "func_800168DC", on_link_prim) != 0) {
+        g_api->override_name(g_self, "func_800168DC", on_link_prim) != 0 ||
+        g_api->register_present_hook(g_self, on_present) != 0) {
         coop_log(OP_MOD_LOG_ERROR, "could not install the Multiplayer menu");
         return 1;
     }
