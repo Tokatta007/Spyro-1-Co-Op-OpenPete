@@ -157,31 +157,26 @@ can hesitate before attacking again. It does attack eventually, and it is hard
 to reproduce. Likely its pod changing owner as the two distances cross the
 switch margin. Accepted by the user as not worth chasing for now.
 
-### X4. Dragons clipping on the portal transition screen: draw order, v0.5.5
+### X4. Dragons overlapping on the portal transition screen: v0.5.6
 
-Screenshots 2026-09-13 on "Entering Stone Hill". The transition is staged: Spyro
-is parked and the camera orbits him, so the wingman is sometimes nearer the
-camera and sometimes farther.
+Screenshots 2026-09-13 on "Entering Stone Hill", then reproduced headless from a
+savestate at the portal (see "Headless screenshots" in `CLAUDE.md`).
+
+The camera starts facing the pair, then swings to a side view and stays there.
+Logged in that pose: camera to lead (+2695, +58, +818), lead to wingman
+(+1024, 0, 0). The wing line points straight down the view, so the wingman is
+directly behind the lead, smaller and hidden.
 
 | Version | Wingman placed | Result |
 | --- | --- | --- |
-| PS1, v0.5.2 | along Spyro's wing line, wingman always drawn first | the look the user wants, but clips |
-| v0.5.3 | square to the camera's view | no longer turns with him; worse |
+| PS1, v0.5.2 | along Spyro's wing line | the look the user wants, but overlaps side-on |
+| v0.5.3 | square to the camera's view | nose to tail side-on; worse |
 | v0.5.4 | behind, out along the wing line, and lower | one big dragon and one small; worse |
-| **v0.5.5** | **wing line, farther dragon drawn first** | awaiting test |
+| v0.5.5 | wing line, farther dragon drawn first | overlap unchanged, and both dragons took the wingman's colour |
+| **v0.5.6** | **wing line, dropping up to 500 as the wing line turns toward the camera** | clear in every screenshot; awaiting the user |
 
-The cause was never the placement. The two models have no depth test between
-them, so the later draw shows through the earlier one. The PS1 build found this
-and drew the farther dragon first (PS1 `CLAUDE.md`, item 0c, "DEPTH SORT IS DRAW
-ORDER"); this port lost it when the wingman became his own call for colour.
-Covers the transition, the landing and the level exit.
-
-Possible side effect: with interpolation on, while the lead is drawn first the
-in-between frames may show him in the wingman's colour.
-
-Not yet checked: the same order problem in gameplay, where player 2 is always
-drawn first. If player 1 ever shows through player 2 when player 2 is nearer
-the camera, the same fix applies to the scene composer.
+Draw order was not the cause on OpenPete. Lead-first draws also break colour, so
+the wingman is always drawn first.
 
 ### X2. Player 2 copies player 1's controls
 

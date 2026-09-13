@@ -166,9 +166,9 @@ int coop_draw_install(void) {
  * sideways. Player 2's own state is not used: in these sequences he has no
  * meaningful pose of his own, and the two dragons look identical anyway.
  *
- * The wingman is his own call of the renderer, and whichever dragon is
- * farther from the camera is drawn first: see THE PORTAL PAIR below and DRAW
- * ORDER MATTERS above. (Calling base() twice inside one call was tried
+ * The wingman is his own call of the renderer, drawn before the lead: see
+ * DRAW ORDER MATTERS above, and THE PORTAL PAIR SEEN FROM THE SIDE below.
+ * (Calling base() twice inside one call was tried
  * first: both dragons took the second one's colour, and the wingman did not
  * survive interpolation either.)
  *
@@ -180,28 +180,41 @@ int coop_draw_install(void) {
 #define FLAME_OFF_MATRIX 0xB8  /* g_SpyroFlame running orientation matrix */
 #define FLAME_MATRIX_INTS 5
 
-/* THE PORTAL PAIR: DEPTH SORT IS DRAW ORDER (2026-09-13).
+/* THE PORTAL PAIR SEEN FROM THE SIDE (2026-09-13, measured headless).
  *
- * The wingman flies along the lead's wing line, as on PS1: a rigid formation
- * that turns with him. In the level transition (gamestate 1) the game parks
- * Spyro and orbits the camera around him, so over the flight the wingman is
- * sometimes nearer the camera and sometimes farther.
+ * The wingman flies along the lead's wing line, as on PS1. In the level
+ * transition (gamestate 1) the camera starts facing the pair and then swings
+ * round to a side view, where it stays for most of the screen. Logged there:
+ * camera to lead (+2695, +58, +818), lead to wingman (+1024, 0, 0). The wing
+ * line points straight down the view, so the wingman sits directly behind the
+ * lead, smaller and hidden by him. That was the "clipping".
  *
- * There is no depth test between the two dragons: a model goes into the
- * ordering table at a coarse depth, so the later draw wins outright and shows
- * through the other. The PS1 build hit this and fixed it by drawing the
- * FARTHER dragon first. This port lost that when the wingman became his own
- * call for colour and was always drawn first, and the user saw them clip.
+ * Tried and rejected: square to the camera's view (v0.5.3, seen side-on that
+ * is nose to tail), a trailing stagger (v0.5.4), and drawing the farther dragon
+ * first (v0.5.5: no change to the overlap, and the native renderer gave both
+ * dragons the colour of whichever was drawn last).
  *
- * Two formations were tried instead and rejected by the user: square to the
- * camera's view (v0.5.3, stopped turning with him) and a trailing stagger
- * (v0.5.4, looked like one big and one small dragon). */
-static int64_t dist2_to_camera(const int32_t p[3]) {
+ * So the formation stays, and the wingman drops as the wing line turns toward
+ * the camera: by TUNNEL_DROP times the cosine of the angle between them. Faced
+ * head-on nothing moves; side-on he flies below the lead. Below, not above,
+ * because the camera sits under the pair and perspective already lowers the
+ * farther dragon; above needed more than 700 units and still touched. Chosen
+ * from headless screenshots: 350 touched in places, and with cos squared a
+ * horn still grazed a wingtip mid-swing; 500 times cos clears every frame.
+ * Tunnel only; the landing must match where play begins. */
+#define TUNNEL_DROP 500
+
+static int32_t tunnel_drop(const int32_t lead[3], const int32_t off[3]) {
     const int32_t* cam = guest32(OP_GADDR_g_Camera + CAMERA_OFF_POSITION);
-    int64_t dx = (int64_t)p[0] - cam[0];
-    int64_t dy = (int64_t)p[1] - cam[1];
-    int64_t dz = (int64_t)p[2] - cam[2];
-    return dx * dx + dy * dy + dz * dz;
+    int64_t v[3] = { (int64_t)lead[0] - cam[0], (int64_t)lead[1] - cam[1],
+                     (int64_t)lead[2] - cam[2] };
+    int64_t  dot = v[0] * off[0] + v[1] * off[1] + v[2] * off[2];
+    uint64_t vl  = isqrt64((uint64_t)(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]));
+    uint64_t ol  = isqrt64((uint64_t)((int64_t)off[0] * off[0] + (int64_t)off[1] * off[1]));
+    if (vl == 0 || ol == 0)
+        return 0;
+    int64_t c = (dot < 0 ? -dot : dot) * 4096 / (int64_t)(vl * ol);   /* |cos|, 4096 = 1 */
+    return (int32_t)(TUNNEL_DROP * c / 4096);
 }
 
 /* One wingman draw at wing_pos in his player's colour, as his own call, with
@@ -263,30 +276,16 @@ static void on_spyro_model(CPUState* cpu) {
     int32_t  right[3], wing_pos[3];
 
     coop_formation_offset(right);
+    if (coop_gamestate() == 1)
+        right[2] -= tunnel_drop(pos, right);
     for (int i = 0; i < 3; i++)
         wing_pos[i] = pos[i] + right[i];
 
-    /* Farther first, nearer last. Ties keep the wingman first, as before. */
-    int wingman_first = dist2_to_camera(wing_pos) >= dist2_to_camera(pos);
-
+    /* The wingman first, always: see DRAW ORDER MATTERS. (Lead first was tried
+       in v0.5.5 and gave both dragons the wingman's colour.) */
     SavedRegs regs;
     save_regs(cpu, &regs);
-
-    if (wingman_first) {
-        draw_wingman(cpu, pos, mtx, filter, wing_pos);
-        load_regs(cpu, &regs);
-        g_api->base(cpu);                    /* the lead, nearer */
-    } else {
-        /* The lead first. The wingman's call gets the original arguments, and
-           the lead's results are what the caller sees afterwards. With
-           interpolation on, the in-between frames may show the lead in the
-           wingman's colour while this order holds (the native renderer takes
-           the last draw's colour); interpolation already hides player 2. */
-        g_api->base(cpu);
-        SavedRegs after;
-        save_regs(cpu, &after);
-        load_regs(cpu, &regs);
-        draw_wingman(cpu, pos, mtx, filter, wing_pos);
-        load_regs(cpu, &after);
-    }
+    draw_wingman(cpu, pos, mtx, filter, wing_pos);
+    load_regs(cpu, &regs);
+    g_api->base(cpu);
 }

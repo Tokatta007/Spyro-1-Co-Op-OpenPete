@@ -75,6 +75,12 @@ It only reaches the title screen, so it proves the mod loads and does not crash
 at startup; it does not exercise gameplay. **It rotates the log**, so read the
 user's session log before running it.
 
+**Headless screenshots of real scenes** are possible, and are how the portal
+and menu work of 2026-09-13 was checked. The recipe uses engine options that
+are not in OpenPete's public help, so it lives in `docs/private/
+headless-testing.md` (gitignored) rather than here. Do not copy those option
+names into any tracked file.
+
 **Print only through `coop_status()` and `coop_log()`**, never
 `g_api->ui_status` / `g_api->log` directly. The API's functions are pointers
 the compiler cannot check against a format string. On 2026-09-12 a mis-aimed
