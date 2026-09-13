@@ -272,3 +272,68 @@ without incident.
 **Not yet exercised:** a death (`deaths=0`), a sequence started by the
 *shadow* dragon (`handovers=0`; the portal was entered by the live one), and
 the dragon rescue caller (gamestate 8). Those are the next things to provoke.
+
+---
+
+## 7. Visibility experiment, 2026-09-12
+
+`coop_draw.c` calls the game's model, shadow and flame renderers a second time
+with player 2's Spyro state swapped in, the way the PS1 build drew him.
+
+### What was seen
+
+- **Normal play: player 2 is not visible.** Toggling "Draw player 2" makes no
+  difference. The readout confirms the code runs (`draws=299` in the log).
+- **Holding Tab (fast-forward): player 2 appears.**
+- **Also under Tab: the camera's dragon sometimes stutters**, replaying the
+  current animation over and over until it finishes. Not seen in normal play.
+- **Player 2's flame particles are visible in normal play**: nostril smoke and
+  the puff at the end of each flame. Particles are a shared world system his
+  tick spawns into, drawn by a different path.
+- **Sparx flies to whichever dragon the swap_view key makes live.** Expected:
+  Sparx follows the live dragon, and player 2 has no Sparx of his own until
+  phase B.
+
+### What the engine said
+
+One line, and it names the problem:
+
+```
+[render-paths] DEFECT f=2527 path=spyro fed 203 native tris with no polybuf
+interval and no render_path_mark_drawn; sub-tick presents drop it
+```
+
+Player 2's 203 triangles **did** reach the native renderer on its `spyro` path.
+But at a render rate above the sim rate, most presented frames are sub-tick
+frames the engine builds between ticks, and those are assembled from bracketed
+intervals of each render path. The second dragon arrives outside any bracket,
+so every sub-tick frame drops him and only tick-aligned frames keep him. Tab
+presents far fewer sub-tick frames, which is why he shows up there.
+
+The same log reports `interp: initialised: 5 regions, 1200 bytes/snapshot` and
+`capture enabled (render-fps=100 > sim ~30 Hz)`: the engine snapshots some
+guest regions to interpolate between ticks. A snapshot taken while player 2 is
+swapped into `g_Spyro` would blend the two dragons' animation state, which fits
+the stutter under Tab. **That is a hypothesis, not a measurement.**
+
+No `RESTORE MISMATCH` or sub-tick write was reported
+(`cpu_writes_while_open=0`), so the swap does not perturb the engine's own
+sub-tick machinery.
+
+### What it means
+
+Calling the renderers twice is **correct**: the geometry is produced and
+accepted. What is missing is the engine's per-path bookkeeping for a second
+dragon, which a mod cannot supply (`render_path_mark_drawn` is not in the API).
+Smooth visibility at high frame rates therefore needs engine support, and this
+log line is the precise thing to ask about.
+
+### Next tests, no code needed
+
+1. **Render FPS at 30**, matching the sim, so there are no sub-tick frames.
+   Prediction: player 2 visible all the time, and no stutter, since the log
+   ties interpolation capture to render FPS above sim rate.
+2. **Interpolation off** (the interp toggle key). Prediction: the same, if
+   sub-tick presents stop being built.
+3. **Tab with "Draw player 2" off.** Prediction: he disappears, which proves
+   the Tab visibility comes from this draw and nothing else.
