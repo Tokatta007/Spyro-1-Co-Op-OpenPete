@@ -39,7 +39,7 @@ cannot be on one screen.
 
 ## 2. Missing, planned
 
-### M5. In-game Multiplayer and Color menus: stage 1 of 4 BUILT (v0.5.0)
+### M5. In-game Multiplayer and Color menus: stages 1 to 3 BUILT (v0.6.0), awaiting test
 
 Decided with the user 2026-09-13. The mod should be fully playable from a couch
 with controllers, so every player-facing setting must be reachable in game.
@@ -66,9 +66,21 @@ with controllers, so every player-facing setting must be reachable in game.
 
 1. **Built:** settings core, the M panel, and per-player colour applied to both
    dragons (including the portal wingman) through the game's own tint.
-2. Pause menu row and Multiplayer page.
-3. Color page.
-4. Spinning Spyro previews.
+2. **Built (v0.6.0):** MULTIPLAYER row in the pause list, above QUIT / EXIT
+   LEVEL, and the Multiplayer page: PLAYERS, RESPAWN, COLORS, SPLIT (grey, with
+   a "not available yet" hint), DONE. TRIANGLE or DONE goes back one level.
+3. **Built (v0.6.0):** the Colors page, as on PS1: RED, GREEN, BLUE, STRENGTH
+   for P1 and P2, LEFT/RIGHT by one, L2/R2 by 16, SQUARE resets the column,
+   and a swatch per player showing the blended result.
+4. Spinning Spyro previews. Not started.
+
+Checked headless 2026-09-13 with screenshots (`--skip-to-level artisans` and a
+scripted movie): the list with five rows and a grown box, the shimmer on
+MULTIPLAYER, both pages, a value change, backing out, and moving past
+MULTIPLAYER in both directions. Not yet seen: the EXIT LEVEL and flight-level
+QUIT variants of the list. Two looks differ between the renderers: the grey
+"disabled" shade shows pale purple in the native renderer, and the swatch
+borders draw only in PsyCross.
 
 ### C1. Colour follows the slot, not the dragon: FIXED in v0.5.1, awaiting test
 

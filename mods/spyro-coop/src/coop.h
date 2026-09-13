@@ -13,6 +13,7 @@
 #ifndef SPYRO_COOP_H
 #define SPYRO_COOP_H
 
+#include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 #include <openpete_mod_api.h>
@@ -142,6 +143,18 @@ typedef struct {
 } CoopRespawnArena;
 
 /* ------------------------------------------------------------------------
+ * A fifth allocation, appended for the ledger reason above: the in-game
+ * Multiplayer menu (coop_menu.c). In guest memory so a savestate taken with
+ * a page open, or a rewind, finds the menu where the game's own pause is.
+ * ---------------------------------------------------------------------- */
+typedef struct {
+    int32_t  page;          /* 0 none, 1 Multiplayer, 2 Colors */
+    int32_t  cursor;        /* row on that page */
+    uint32_t scratch_used;
+    uint8_t  scratch[244];  /* strings and vectors the game reads by pointer */
+} CoopMenuArena;
+
+/* ------------------------------------------------------------------------
  * Host counters. Display only: they reset after a savestate load, which is
  * acceptable for numbers nobody plays against.
  * ---------------------------------------------------------------------- */
@@ -166,6 +179,7 @@ typedef struct {
     uint32_t cam_max_dist[2];
     unsigned probe_refusals, query_refusals;
     unsigned padvsync_calls, padvsync_in_swap;
+    unsigned menu_opens;          /* Multiplayer page opened from the pause list */
 } CoopStats;
 
 extern CoopStats g_stats;
@@ -187,6 +201,7 @@ void coop_settings_load(void);
 void coop_settings_save(void);
 void coop_settings_tick(void);     /* adopt an M panel edit */
 void coop_settings_changed(void);  /* after the in-game menu edits g_settings */
+void coop_settings_reset_color(int player);  /* back to Spyro's own, and save */
 
 /* coop_main.c */
 CoopArena* coop_arena(void);
@@ -228,6 +243,9 @@ void coop_sparx_heal(CPUState* cpu);
 /* coop_draw.c */
 int  coop_draw_install(void);  /* gameplay draw and portal fly-in */
 void coop_tint_state(void);    /* keep both dragons' colour in game state */
+
+/* coop_menu.c */
+int  coop_menu_install(uint32_t menu_vaddr);
 
 /* coop_gates.c */
 int  coop_gates_install(void);

@@ -15,6 +15,7 @@ static uint32_t g_arena_vaddr;  /* a guest address, valid across reloads */
 static uint32_t g_moby_vaddr;   /* the moby partition block, likewise */
 static uint32_t g_extra_vaddr;  /* the third block, likewise */
 static uint32_t g_respawn_vaddr;  /* the fourth block, likewise */
+static uint32_t g_menu_vaddr;     /* the fifth block, likewise */
 
 CoopArena* coop_arena(void) {
     /* Resolved on every use: the host view is not promised to survive a
@@ -118,6 +119,7 @@ void coop_publish_status(void) {
                      g_stats.camera_other, g_stats.camera_other_ra);
     coop_status("Collision guard refusals: probe %u, query %u",
                      g_stats.probe_refusals, g_stats.query_refusals);
+    coop_status("Multiplayer page opened %u times (pause, then MULTIPLAYER)", g_stats.menu_opens);
     coop_pad_status();
 
     /* A summary in the log every ~10 seconds of gameplay, so a session can be
@@ -195,12 +197,17 @@ int openpete_mod_entry(const openpete_mod_api_t* api, openpete_mod_t* self) {
         coop_log(OP_MOD_LOG_ERROR, "could not allocate the respawn block");
         return 1;
     }
+    g_menu_vaddr = api->guest_alloc(self, sizeof(CoopMenuArena), 4, 0, &view);
+    if (g_menu_vaddr == 0) {
+        coop_log(OP_MOD_LOG_ERROR, "could not allocate the menu block");
+        return 1;
+    }
 
 
     if (coop_players_install() != 0 || coop_draw_install() != 0 ||
         coop_gates_install() != 0 || coop_pad_install() != 0 ||
         coop_respawn_install() != 0 || coop_mobys_install() != 0 ||
-        coop_sound_install() != 0)
+        coop_sound_install() != 0 || coop_menu_install(g_menu_vaddr) != 0)
         return 1;
     api->register_toggle_hook(self, on_toggle);
 

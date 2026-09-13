@@ -144,6 +144,12 @@ void coop_settings_changed(void) {
     coop_settings_save();
 }
 
+/* SQUARE on the in-game Colors page. */
+void coop_settings_reset_color(int player) {
+    memcpy(g_settings.color[player & 1], k_default_color, 4);
+    coop_settings_changed();
+}
+
 /* ------------------------------------------------------------------------
  * The M overlay panel
  * ---------------------------------------------------------------------- */
