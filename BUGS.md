@@ -80,15 +80,32 @@ now answers which person is in each slot, from the view-key state and the
 handover flag. Known gap: if player 2 dies in a way that runs the stock death
 sequence, the death animation still shows player 1's colour.
 
-### C2. The portal wingman shows player 1's colour: diagnosing
+### C2. The portal wingman shows player 1's colour: CAUSE MEASURED, fix built in v0.5.2
 
-Seen 2026-09-13 through a portal and on leaving a level, though his colour is
-written before his draw. The retail renderer reads the filter on every call
-(`r_pete`, `lw a0, g_Spyro + 0x28`, loaded into the GTE far colour), but the
-engine also rebuilds Spyro natively from game state (its `spyro-walk` and
-`spyro-dump colorFilter@0x28` diagnostics). v0.5.1 logs the far colour after
-each of the two draws for the first three portal flights, which says whether
-the retail renderer used the wingman's colour and the engine then dropped it.
+The v0.5.1 diagnostic logged, in one portal flight, the lead drawn with a red
+filter and the retail renderer's GTE far colour red, then the wingman with a
+green filter and far colour green. The user saw two green dragons. So the
+retail renderer honoured both colours and **OpenPete's native rebuild of
+Spyro takes one colour per call of the model renderer: the last dragon drawn
+inside that call.** The wingman was drawn by calling `base()` a second time
+inside the lead's call.
+
+The same rule explains a second observation: with interpolation on, the
+camera's dragon showed player 2's colour, and switching interpolation off
+turned it back and revealed player 2. The in-between frames show one dragon,
+coloured like the last Spyro draw of the frame, which was player 2's.
+
+**v0.5.2:** every extra dragon is its own renderer call, drawn before the
+dragon the camera follows, which is then always last. In gameplay player 2 is
+now drawn ahead of player 1 from the composer's model call.
+
+### C3. Spyro turns purple during a dragon's dialogue: fix built in v0.5.2
+
+Seen 2026-09-13: after the hatching animation Spyro shows his own colour for the
+conversation, then his chosen colour again afterwards. The game clears the
+filter's strength on state changes (`ChangeSpyroState`), and the tint was only
+written immediately before each draw. v0.5.2 also keeps both dragons' colour
+in game state every frame, in every gamestate.
 
 ### M3. Sounds from player 2's side: BUILT in v0.4.2, awaiting test
 
@@ -148,13 +165,15 @@ can hesitate before attacking again. It does attack eventually, and it is hard
 to reproduce. Likely its pod changing owner as the two distances cross the
 switch margin. Accepted by the user as not worth chasing for now.
 
-### X4. Dragons overlapping on the portal loading screen: gap widened, awaiting test
+### X4. Dragons overlapping on the portal screens: spacing raised to 1,024 in v0.5.2
 
-Seen 2026-09-13 in the tunnel when entering a level. The wingman sat 640 units
-out, the same world units and the same spacing the PS1 build used
-(`SP1X2_P2_START_OFFSET` 0x280), so the PS1 build likely overlapped too, less
-visibly. v0.5.1 widens the gap to 1,024 in gamestate 1 only. That screen cuts to
-the level before play, so the landing and play still start 640 apart.
+Seen 2026-09-13. The PS1 build used 640 (`SP1X2_P2_START_OFFSET` 0x280), and the
+units are identical on OpenPete, which runs the original game logic. v0.5.1
+widened only the tunnel flight (gamestate 1); the user still saw overlap
+entering a level, which matches the entrance landing (gamestate 9) still at
+640, and none leaving a level, which has no landing. v0.5.2 uses 1,024 for the
+seed and every sequence alike, so the dragons never change spacing between
+one and the next.
 
 ### X2. Player 2 copies player 1's controls
 

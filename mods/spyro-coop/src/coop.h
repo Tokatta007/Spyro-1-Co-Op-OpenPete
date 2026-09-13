@@ -33,6 +33,7 @@ extern openpete_mod_t*           g_self;
 #define RA_GAMEPLAY_ENV_UPDATE 0x80033A98u  /* jal func_8002A6FC at 0x80033A90,
                                                immediately before jalr g_UpdateMoby */
 /* Spyro's model renderer, func_80023AC4, called from the sequence draws: */
+#define RA_COMPOSER_MODEL      0x80019700u  /* func_80019698, the scene composer */
 #define RA_FLYIN_MODEL         0x8001A0E0u  /* func_8001A050: gamestates 1 and 9 */
 #define RA_FLYOUT_MODEL        0x8001C96Cu  /* func_8001C694: gamestate 10 */
 
@@ -64,9 +65,13 @@ extern openpete_mod_t*           g_self;
    which reposition the live dragon without rebuilding the level. */
 #define GS_PLAYING 0
 
-/* How far apart the dragons start, in world units. Above the body radius, or
-   the separation push would shove them apart the moment play resumes. */
-#define P2_START_OFFSET 0x280
+/* How far apart the dragons start, and fly in formation, in world units. The
+   PS1 build used 0x280 (640); the world units are the same on OpenPete, which
+   runs the original game logic. At 640 the flying pose's wings overlapped in
+   the portal tunnel and the entrance landing (seen 2026-09-13), so 1024. One
+   value for seeding and every sequence, so the dragons never jump apart when
+   one hands over to the next. Must stay above the body radius (416). */
+#define P2_START_OFFSET 0x400
 
 /* ------------------------------------------------------------------------
  * Per-player state. Lives in the guest arena, so savestates, rewind and
@@ -222,6 +227,7 @@ void coop_sparx_heal(CPUState* cpu);
 
 /* coop_draw.c */
 int  coop_draw_install(void);  /* gameplay draw and portal fly-in */
+void coop_tint_state(void);    /* keep both dragons' colour in game state */
 
 /* coop_gates.c */
 int  coop_gates_install(void);

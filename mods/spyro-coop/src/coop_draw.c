@@ -1,31 +1,26 @@
 /**
  * @file coop_draw.c
- * @brief The visibility experiment: draw player 2 with the game's own Spyro
- *        renderers.
+ * @brief Drawing player 2, the portal wingman, and both dragons' colours.
  *
  * THE PS1 WAY, ported unchanged in idea. Spyro is not a moby, so there is
- * nothing to spawn. Instead, after the game has drawn player 1, swap player
- * 2's Spyro state into the same globals and call the same three renderers
- * again: the model, the drop shadow, and (if he is breathing fire) the flame.
- * Swap back. The renderers never know there are two dragons.
+ * nothing to spawn. Swap player 2's Spyro state into the same globals, call
+ * the same three renderers (model, drop shadow, and flame when he breathes
+ * fire), and swap back. The renderers never know there are two dragons.
  *
  * WHERE. The gameplay scene composer, func_80019698, draws mobys, then Spyro's
- * model, shadow and flame, then calls func_80058BA8 (glows and sparkles) last.
- * func_80058BA8 has that one caller, so a pre-hook on it runs exactly once per
- * composed scene, straight after player 1's dragon, whether or not player 1
- * himself was hidden. The flame's orientation matrix lives inside the flame
- * state we already swap, so each dragon keeps his own; the PS1 build needed
- * per-viewport flame chains only because it drew every dragon twice.
+ * model, shadow and flame, then glows and sparkles (func_80058BA8). Player 2
+ * is drawn from the model renderer's override at the composer's call, AHEAD of
+ * player 1, for the reason in DRAW ORDER MATTERS below; the glows hook covers
+ * a scene where player 1 is hidden and the composer skips his model. The
+ * flame's orientation matrix lives in the flame state we already swap, so
+ * each dragon keeps his own; the PS1 build needed per-viewport flame chains
+ * only because it drew every dragon twice.
  *
- * WHY IT IS AN EXPERIMENT. On PS1 these renderers emitted primitives into an
- * ordering table, and calling them twice drew twice. OpenPete's native
- * renderer builds its scene its own way, so whether a second call produces a
- * second dragon is exactly what this finds out. Three outcomes are possible:
- *   - a second dragon appears: visible single-screen co-op, today;
- *   - nothing appears: the renderer does not take its dragon from these calls;
- *   - one dragon flickers or smears between two places: it does, but treats
- *     both calls as the same object, which is worth knowing for the pane API.
- * The "Draw player 2" setting switches just this off, for comparison.
+ * WHAT OPENPETE DOES WITH IT (measured). The second dragon's geometry reaches
+ * the native renderer, which draws it on whole frames and drops it from the
+ * in-between frames it builds for high frame rates (PORT-INVENTORY.md §7), so
+ * player 2 is visible with interpolation off. The "Draw player 2" setting
+ * switches just this off, for comparison.
  */
 
 #include "coop.h"
@@ -56,49 +51,90 @@ static void apply_tint(int slot) {
     g_tint_written[slot] = c[3];
 }
 
-/* WINGMAN COLOUR DIAGNOSTIC (2026-09-13). The portal wingman showed player 1's
-   colour although his filter is written before his draw. The retail renderer
-   reads g_Spyro + 0x28 per call and loads it into the GTE far colour (RFC,
-   GFC, BFC = gte_ctrl 21..23), but OpenPete also rebuilds Spyro natively from
-   game state. Logging the far colour after each of the two draws says which
-   side drops the wingman's colour: different values mean the retail renderer
-   used it and the engine's native path did not. */
-static unsigned g_wingman_diag;
 
-static void on_glows_and_sparkles(CPUState* cpu) {
+/* ------------------------------------------------------------------------
+ * DRAW ORDER MATTERS ON OPENPETE (measured 2026-09-13). OpenPete rebuilds
+ * Spyro natively, and it takes ONE colour per call of the model renderer: the
+ * colour of the last dragon drawn inside that call. Its in-between frames
+ * show one dragon, coloured like the last Spyro draw of the frame. The portal
+ * diagnostic showed the retail renderer giving the lead red and the wingman
+ * green in one call, and the user saw two green dragons; with player 2 drawn
+ * after player 1, the camera's dragon showed player 2's colour until
+ * interpolation was switched off.
+ *
+ * So: every extra dragon is its own call of the renderer, and it is drawn
+ * BEFORE the dragon the camera follows, which is then always last.
+ * ---------------------------------------------------------------------- */
+
+static int g_p2_drawn_this_scene;   /* the composer's hook drew him already */
+static int g_in_extra_draw;         /* inside a call we made ourselves */
+
+static int p2_draw_wanted(CoopArena* A) {
+    return coop_enabled() && coop_draw_enabled() && A->ready &&
+           *guest32(OP_GADDR_g_LevelId) == A->last_level;
+}
+
+/* Player 2's model, shadow and flame, each as its own renderer call, with his
+   state swapped in. Only when he exists, belongs to this level (so a level
+   transition does not draw him where he stood in the last one), and drawing
+   is wanted. */
+static void draw_player2(CPUState* cpu) {
     CoopArena* A = coop_arena();
+    SavedRegs regs;
+    save_regs(cpu, &regs);
 
-    /* Only when he exists, belongs to this level (so a level transition does
-       not draw him where he stood in the last one), and drawing is wanted. */
-    if (coop_enabled() && coop_draw_enabled() && A->ready &&
-        *guest32(OP_GADDR_g_LevelId) == A->last_level) {
-        SavedRegs regs;
-        save_regs(cpu, &regs);
+    coop_swap_spyro();
+    A->swapped = 1;  /* lets the PadVSync counter see this window too */
+    g_in_extra_draw = 1;
 
-        coop_swap_spyro();
-        A->swapped = 1;  /* lets the PadVSync counter see this window too */
-
-        /* Both checks read HIS state: he is swapped in. */
-        if (*guest32(OP_GADDR_g_IsSpyroHidden) == 0) {
-            g_drawing_p2 = 1;                            /* tinted as player 2 */
-            g_api->call(cpu, OP_FNADDR_func_80023AC4);   /* model */
-            g_drawing_p2 = 0;
-            g_api->call(cpu, OP_FNADDR_func_80059A48);   /* drop shadow */
-            g_stats.p2_draws++;
-        }
-        if (*guest8(OP_GADDR_g_SpyroFlame + FLAME_OFF_ACTIVE) != 0) {
-            g_api->call(cpu, OP_FNADDR_func_80058D64);   /* flame */
-            g_stats.p2_flame_draws++;
-        }
-
-        A->swapped = 0;
-        coop_swap_spyro();
-
-        /* The original expects its own arguments, and api->call clobbered
-           them. The CPUState reference requires restoring them. */
-        load_regs(cpu, &regs);
+    /* Both checks read HIS state: he is swapped in. */
+    if (*guest32(OP_GADDR_g_IsSpyroHidden) == 0) {
+        g_drawing_p2 = 1;                            /* tinted as player 2 */
+        apply_tint(1);                               /* before the call, not inside it */
+        g_api->call(cpu, OP_FNADDR_func_80023AC4);   /* model */
+        g_drawing_p2 = 0;
+        g_api->call(cpu, OP_FNADDR_func_80059A48);   /* drop shadow */
+        g_stats.p2_draws++;
+    }
+    if (*guest8(OP_GADDR_g_SpyroFlame + FLAME_OFF_ACTIVE) != 0) {
+        g_api->call(cpu, OP_FNADDR_func_80058D64);   /* flame */
+        g_stats.p2_flame_draws++;
     }
 
+    g_in_extra_draw = 0;
+    A->swapped = 0;
+    coop_swap_spyro();
+
+    /* The original expects its own arguments, and api->call clobbered them.
+       The CPUState reference requires restoring them. */
+    load_regs(cpu, &regs);
+}
+
+/* func_80058BA8 (glows and sparkles), the composer's last call: the fallback
+   for a scene where player 1 was hidden, so the composer never called the
+   model renderer and player 2 was not drawn ahead of him. */
+/* Keep both dragons' colour in game state, every frame, in every gamestate.
+   Writing it only immediately before each draw was not enough: during a
+   dragon's dialogue the game keeps clearing the filter (ChangeSpyroState
+   zeroes its strength byte), and the native rebuild evidently reads it from
+   state rather than only at the draw, so Spyro showed purple for the
+   conversation (seen 2026-09-13). */
+void coop_tint_state(void) {
+    CoopArena* A = coop_arena();
+    if (A->swapped)
+        return;                              /* never mid-swap */
+    apply_tint(0);
+    if (A->ready) {
+        const uint8_t* c = g_settings.color[coop_physical_player(1)];
+        if (c[3] != 0 || g_tint_written[1] != 0)
+            memcpy(A->spyro + SPYRO_OFF_COLOR_FILTER, c, 4);
+    }
+}
+
+static void on_glows_and_sparkles(CPUState* cpu) {
+    if (!g_p2_drawn_this_scene && p2_draw_wanted(coop_arena()))
+        draw_player2(cpu);
+    g_p2_drawn_this_scene = 0;
     g_api->base(cpu);
 }
 
@@ -130,10 +166,10 @@ int coop_draw_install(void) {
  * sideways. Player 2's own state is not used: in these sequences he has no
  * meaningful pose of his own, and the two dragons look identical anyway.
  *
- * Unlike the gameplay draw, this one calls base() twice INSIDE the model
- * renderer's own override. If the engine brackets its render paths per call
- * of this function, the wingman may survive interpolation where the gameplay
- * draw does not, which would be worth knowing.
+ * The wingman is his own call of the renderer, drawn before the lead: see
+ * DRAW ORDER MATTERS above. (Calling base() twice inside one call was tried
+ * first: both dragons took the second one's colour, and the wingman did not
+ * survive interpolation either.)
  *
  * Covered call sites, read from the retail executable:
  *   0x8001A0D8 in func_8001A050: level transition (1) and entrance (9)
@@ -141,12 +177,25 @@ int coop_draw_install(void) {
  * ---------------------------------------------------------------------- */
 
 #define FLAME_OFF_MATRIX 0xB8  /* g_SpyroFlame running orientation matrix */
-#define TUNNEL_GAP_NUM   8      /* 640 * 8 / 5 = 1024 units in the portal tunnel */
-#define TUNNEL_GAP_DEN   5
 #define FLAME_MATRIX_INTS 5
 
 static void on_spyro_model(CPUState* cpu) {
-    apply_tint(g_drawing_p2 ? 1 : 0);        /* every Spyro draw, everywhere */
+    if (g_in_extra_draw) {
+        g_api->base(cpu);                    /* a call we made: colour already set */
+        return;
+    }
+    apply_tint(g_drawing_p2 ? 1 : 0);
+
+    /* The gameplay scene composer: player 2 first, as his own call. */
+    if (cpu->ra == RA_COMPOSER_MODEL) {
+        if (p2_draw_wanted(coop_arena())) {
+            draw_player2(cpu);
+            g_p2_drawn_this_scene = 1;
+            apply_tint(0);                   /* the lead's colour, for his call */
+        }
+        g_api->base(cpu);                    /* player 1, last */
+        return;
+    }
 
     if ((cpu->ra != RA_FLYIN_MODEL && cpu->ra != RA_FLYOUT_MODEL) ||
         !coop_enabled() || !coop_draw_enabled()) {
@@ -157,61 +206,41 @@ static void on_spyro_model(CPUState* cpu) {
     SavedRegs regs;
     save_regs(cpu, &regs);
 
-    g_api->base(cpu);                                  /* player 1, stock */
-
-    /* The wingman must leave no trace: not his position, and not the flame
-       matrix, which every model draw nudges. Retail nudges it once here. */
-    int32_t* pos = guest32(OP_GADDR_g_Spyro + SPYRO_OFF_POSITION);
-    int32_t* mtx = guest32(OP_GADDR_g_SpyroFlame + FLAME_OFF_MATRIX);
+    /* ---- the wingman FIRST, as his own call ----
+       He must leave no trace: not his position, not the flame matrix every
+       model draw nudges (retail nudges it once here), and not the filter. */
+    int32_t* pos    = guest32(OP_GADDR_g_Spyro + SPYRO_OFF_POSITION);
+    int32_t* mtx    = guest32(OP_GADDR_g_SpyroFlame + FLAME_OFF_MATRIX);
+    uint8_t* filter = guest8(OP_GADDR_g_Spyro + SPYRO_OFF_COLOR_FILTER);
     int32_t  saved_pos[3], saved_mtx[FLAME_MATRIX_INTS], right[3];
+    uint8_t  saved_filter[4];
 
     memcpy(saved_pos, pos, sizeof saved_pos);
     memcpy(saved_mtx, mtx, sizeof saved_mtx);
+    memcpy(saved_filter, filter, 4);
+
     coop_formation_offset(right);
-    if (coop_gamestate() == 1) {
-        /* THE TUNNEL. The dragons clipped wings here (seen 2026-09-13), at the
-           same 640 units the PS1 build used. Gamestate 1 is only the flight
-           through the portal tunnel, which cuts to the level before play, so
-           a wider gap here never has to match the spacing at landing. */
-        for (int i = 0; i < 3; i++)
-            right[i] = right[i] * TUNNEL_GAP_NUM / TUNNEL_GAP_DEN;
-    }
     pos[0] += right[0];
     pos[1] += right[1];
     pos[2] += right[2];
 
-    /* The wingman is player 2, drawn with player 1's pose: his colour, then
-       player 1's filter bytes put back exactly. */
-    uint8_t* filter = guest8(OP_GADDR_g_Spyro + SPYRO_OFF_COLOR_FILTER);
-    uint8_t  saved_filter[4];
-    memcpy(saved_filter, filter, 4);
+    /* He is the other dragon, drawn with the lead's pose. */
     const uint8_t* wing = g_settings.color[coop_physical_player(1)];
     if (wing[3] != 0)
         memcpy(filter, wing, 4);
     else
-        filter[3] = 0;                   /* untinted wingman, even if player 1 is tinted */
+        filter[3] = 0;                       /* untinted, even if the lead is tinted */
 
-    uint32_t lead_far[3] = { cpu->gte_ctrl[21], cpu->gte_ctrl[22], cpu->gte_ctrl[23] };
-    uint8_t  wing_filter[4];
-    memcpy(wing_filter, filter, 4);
-
-    load_regs(cpu, &regs);
-    g_api->base(cpu);                                  /* the wingman */
+    g_in_extra_draw = 1;
+    g_api->call(cpu, OP_FNADDR_func_80023AC4);
+    g_in_extra_draw = 0;
     g_stats.flyin_draws++;
-
-    if (g_wingman_diag < 3 && (saved_filter[3] != 0 || wing_filter[3] != 0)) {
-        g_wingman_diag++;
-        coop_log(OP_MOD_LOG_INFO,
-                 "wingman colour check %u (gamestate %d): lead filter %02X%02X%02X/%02X far "
-                 "%03X %03X %03X | wingman filter %02X%02X%02X/%02X far %03X %03X %03X",
-                 g_wingman_diag, coop_gamestate(),
-                 saved_filter[0], saved_filter[1], saved_filter[2], saved_filter[3],
-                 lead_far[0], lead_far[1], lead_far[2],
-                 wing_filter[0], wing_filter[1], wing_filter[2], wing_filter[3],
-                 cpu->gte_ctrl[21], cpu->gte_ctrl[22], cpu->gte_ctrl[23]);
-    }
 
     memcpy(filter, saved_filter, 4);
     memcpy(pos, saved_pos, sizeof saved_pos);
     memcpy(mtx, saved_mtx, sizeof saved_mtx);
+
+    /* ---- then the lead, last ---- */
+    load_regs(cpu, &regs);
+    g_api->base(cpu);
 }

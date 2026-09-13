@@ -424,6 +424,7 @@ static void on_spyro_tick(CPUState* cpu) {
         g_stats.tick_other++;
         g_stats.tick_other_ra = cpu->ra;
         g_api->base(cpu);
+        coop_tint_state();                   /* a cutscene's tick may have cleared it */
         return;
     }
     g_stats.tick_gameplay++;
@@ -616,6 +617,7 @@ static void on_camera_update(CPUState* cpu) {
         g_stats.camera_other++;
         g_stats.camera_other_ra = cpu->ra;
         g_api->base(cpu);
+        coop_tint_state();
         coop_publish_status();
         return;
     }
@@ -646,6 +648,7 @@ static void on_camera_update(CPUState* cpu) {
     }
 
     coop_pad_sample();
+    coop_tint_state();
     coop_publish_status();
 }
 
