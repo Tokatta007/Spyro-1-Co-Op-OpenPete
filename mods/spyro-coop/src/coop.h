@@ -111,9 +111,11 @@ typedef struct {
  * A third allocation, appended for the same ledger reason as CoopMobyArena.
  * ---------------------------------------------------------------------- */
 typedef struct {
-    /* Player 2's copy of D_80077798, the vector camera mode 6 and
-       func_8003FE40 point g_Camera.m_Focus at. See BUGS.md A1. */
-    int32_t p2_focus_vector[3];
+    /* UNUSED since 2026-09-13. Held player 2's copy of D_80077798 for a
+       camera fix that was tested and ruled out (the camera bug was the pod
+       rule; see coop_mobys.c). Kept so the block's size, and therefore
+       savestates made with v0.3.0, stay valid. Reuse it rather than resize. */
+    int32_t unused_was_p2_focus_vector[3];
     int32_t owner_level;      /* level the moby owner table belongs to */
 } CoopExtraArena;
 
@@ -148,7 +150,6 @@ extern CoopStats g_stats;
 CoopArena* coop_arena(void);
 CoopMobyArena* coop_moby_arena(void);
 CoopExtraArena* coop_extra_arena(void);
-int        coop_focus_per_player(void);
 int        coop_hysteresis_percent(void);
 int        coop_enabled(void);
 int        coop_draw_enabled(void);

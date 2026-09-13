@@ -402,10 +402,7 @@ static void on_moby_update(CPUState* cpu) {
 
         if (M->p2_sparx != 0) {
             *g_sparx = M->p2_sparx;
-            /* With the focus vector per player, his own copy is already live
-               here, swapped in with his camera. */
-            if (!coop_focus_per_player())
-                memcpy(anchor, guest32(OP_GADDR_g_Spyro + SPYRO_OFF_POSITION), 12);
+            memcpy(anchor, guest32(OP_GADDR_g_Spyro + SPYRO_OFF_POSITION), 12);
         }
 
         mask_walk(M, mobys, n, 0, 0);
@@ -414,7 +411,7 @@ static void on_moby_update(CPUState* cpu) {
         mask_walk(M, mobys, n, 0, 1);
 
         *g_sparx = sparx1;
-        if (!coop_focus_per_player() && coop_gamestate() == GS_PLAYING)
+        if (coop_gamestate() == GS_PLAYING)
             memcpy(anchor, saved_anchor, 12);
     }
     g_stats.moby_two_pass++;

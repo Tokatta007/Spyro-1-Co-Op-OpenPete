@@ -394,3 +394,61 @@ keeps dying for an unknown reason cannot fill the level.
 - In the readout: `Moby passes: two-player` climbing in levels, `single` in
   flight levels and menus; `update functions hooked` about one per level
   visited; `P2 Sparx spawns` about one per level.
+
+---
+
+## 9. Fixed 2026-09-13: rams updated twice, and the runaway camera
+
+Two long-standing bugs, both inherited from the PS1 build, with one cause.
+
+### Symptoms
+
+- A ram in two-player ran at roughly double speed, ran in place toward the
+  dragon the camera was not on, and failed to settle after a charge. With
+  player 2 off, on the same savestate, it charged player 1 at normal speed.
+- A camera ran away from its dragon after a ram hit: the PS1 "stratosphere"
+  bug. Logged at 16,000 to 22,590 units, deterministic on a replayed savestate,
+  always camera state `0x8000000A` focused on a moby next to that dragon, and
+  sometimes positioned closer to the other dragon.
+
+### Cause
+
+`func_80051FEC`, the moby update list builder. The mod hid a moby from one
+player's pass by zeroing `m_WasDrawn` and `m_UpdateDistance`, which the
+builder's first loop honours. But adding a moby also marks its pod (`m_Pod`,
+`0x43`), and a second loop adds **every member of every marked pod** from
+`g_MobyPods`, ignoring both fields. A moby whose podmate belonged to the other
+dragon was updated in both passes. A ram's own code steers the camera of the
+dragon it hits, so a ram in both passes steered both cameras.
+
+### Fix
+
+`coop_mobys.c`, `assign_mobys`: ownership is decided per pod group. Membership
+comes from the `g_MobyPods` lists, read exactly as the builder reads them; pods
+linked by a moby that names a different pod are merged; every member shares
+one owner, the dragon nearest any member, with the usual hysteresis.
+
+### Confirmation
+
+User play-test, same area, savestates replayed: the ram at normal speed and the
+camera bug gone. The log: **0 camera runaways** (13 the session before), a
+maximum camera distance of 7,719 (22,590 before), 0 collision guard refusals,
+21 mobys owned as pod groups, and a handover started by the shadow dragon that
+ran cleanly, the first time that path has been exercised.
+
+**It was the pod fix alone.** The session ran with the per-player focus vector
+switched off. That change had already been ruled out (`D_80077798` read zero in
+every runaway) and has been removed; its arena field is kept, unused, so
+savestates stay loadable.
+
+### Ruled out on the way
+
+- **The shared frozen-focus vector `D_80077798`.** PS1's recorded "next
+  suspect". Built, measured, and shown never to be involved.
+- **The view-swap key reassigning mobys.** Real, and fixed, but a testing
+  artefact rather than the cause: it swapped slots, not dragons.
+
+### Residual, accepted
+
+A ram can still hesitate when both dragons are near it after a charge. It
+attacks eventually and is hard to reproduce. `BUGS.md` X3.

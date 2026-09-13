@@ -123,22 +123,6 @@ static void swap_camera(CoopArena* A) {
         int32_t* l = guest32(k_camera_extra[i]);
         int32_t t = *l; *l = A->camera_extra[i]; A->camera_extra[i] = t;
     }
-
-    /* THE SHARED FOCUS VECTOR (BUGS.md A1). Camera mode 6, which a ram's
-       charge triggers, copies the focus into the global D_80077798 and aims
-       g_Camera.m_Focus at it; func_8003FE40 does the same for a moby Spyro is
-       using. m_Focus is per player, inside g_Camera, but the vector it points
-       at was shared, so one player's camera could be retargeted at the other
-       dragon. Swapping it with the camera gives each camera its own. The mod's
-       two manual writes to it (for Sparx) become unnecessary and are skipped
-       while this is on. */
-    if (coop_focus_per_player()) {
-        int32_t* v = guest32(OP_GADDR_D_80077798);
-        int32_t* s = coop_extra_arena()->p2_focus_vector;
-        for (int i = 0; i < 3; i++) {
-            int32_t t = v[i]; v[i] = s[i]; s[i] = t;
-        }
-    }
 }
 
 static void swap_pad(CoopArena* A) {
@@ -215,7 +199,6 @@ static void seed_player2(CoopArena* A) {
     memcpy(A->camera, guest8(OP_GADDR_g_Camera), CAMERA_STRUCT_BYTES);
     for (unsigned i = 0; i < CAMERA_EXTRA_COUNT; i++)
         A->camera_extra[i] = *guest32(k_camera_extra[i]);  /* or he starts with garbage */
-    memcpy(coop_extra_arena()->p2_focus_vector, guest32(OP_GADDR_D_80077798), 12);
     walk(k_pad_regions, COUNT(k_pad_regions), A->pad, 0);
 
     A->last_level = level_id();
@@ -443,7 +426,7 @@ static void on_spyro_tick(CPUState* cpu) {
         g_stats.p2_ticks++;
 
         *substeps = after_p1;                          /* consumed once */
-        if (!coop_focus_per_player() && gamestate() == GS_PLAYING) {
+        if (gamestate() == GS_PLAYING) {
             /* followers (Sparx) track player 1, not the midpoint */
             anchor[0] = saved_anchor[0];
             anchor[1] = saved_anchor[1];
