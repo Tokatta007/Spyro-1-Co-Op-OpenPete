@@ -46,6 +46,8 @@ extern openpete_mod_t*           g_self;
 #define SPYRO_OFF_SCRIPT_FOCUS 0x21C  /* pointer func_8003FE40 copies into
                                          g_Camera.m_Focus unchecked */
 #define SPYRO_OFF_HEALTH       0x164  /* int m_health: 3 green ... 0 no Sparx */
+#define SPYRO_OFF_COLOR_FILTER 0x028  /* r, g, b, interpolation: the game's own
+                                         tint, interpolated with vertex colours */
 
 /* Camera struct offsets, from the decompilation's camera.h (two 20-byte
    SHORTMATRIX fields come first). */
@@ -161,6 +163,24 @@ typedef struct {
 } CoopStats;
 
 extern CoopStats g_stats;
+
+/* ------------------------------------------------------------------------
+ * Settings (coop_settings.c). Host state, tick context only.
+ * ---------------------------------------------------------------------- */
+typedef struct {
+    int     players;         /* 1 or 2 */
+    int     respawn_modern;  /* 1 modern, 0 original */
+    int     split_vertical;  /* 1 vertical, 0 horizontal; no effect until split-screen exists */
+    uint8_t color[2][4];     /* per player: red, green, blue, strength */
+    int     draw_p2;         /* development */
+    int     hysteresis;      /* development: enemy switch margin, percent */
+} CoopSettings;
+
+extern CoopSettings g_settings;
+void coop_settings_load(void);
+void coop_settings_save(void);
+void coop_settings_tick(void);     /* adopt an M panel edit */
+void coop_settings_changed(void);  /* after the in-game menu edits g_settings */
 
 /* coop_main.c */
 CoopArena* coop_arena(void);

@@ -39,6 +39,37 @@ cannot be on one screen.
 
 ## 2. Missing, planned
 
+### M5. In-game Multiplayer and Color menus: stage 1 of 4 BUILT (v0.5.0)
+
+Decided with the user 2026-09-13. The mod should be fully playable from a couch
+with controllers, so every player-facing setting must be reachable in game.
+
+**Design:**
+
+- One set of settings (`coop_settings.c`), edited from two places, the in-game
+  menu and a panel in the M overlay, and saved to
+  `mods/spyro-coop/data/settings.txt`, so both agree and it persists. A mod
+  cannot write `[[config]]` values, which is why these are not config rows.
+- **Pause menu:** a new MULTIPLAYER row in the pause list (the user's choice
+  over the PS1 SQUARE hint).
+- **Multiplayer page rows:** Players (1 / 2), Respawn (Modern / Original),
+  Colors (opens the Color page), Split screen (Vertical / Horizontal). Split
+  screen is shown as not available yet: rendering it needs multi-view support
+  in OpenPete.
+- **Color page:** per player red, green, blue and strength, like the PS1 COLOR
+  page, plus an attempt at spinning Spyro previews (abandoned on PS1 for lack
+  of memory; untried here).
+- **Development settings** (Draw player 2, the view-swap key, the enemy switch
+  margin) stay in the M panel only, and are removed at release.
+
+**Stages:**
+
+1. **Built:** settings core, the M panel, and per-player colour applied to both
+   dragons (including the portal wingman) through the game's own tint.
+2. Pause menu row and Multiplayer page.
+3. Color page.
+4. Spinning Spyro previews.
+
 ### M3. Sounds from player 2's side: BUILT in v0.4.2, awaiting test
 
 `coop_sound.c`, from `Sp1x2SoundListenerDistance`: a 3D sound's distance is

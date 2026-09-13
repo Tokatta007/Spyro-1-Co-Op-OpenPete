@@ -27,3 +27,6 @@ docs/private/
 
 # OpenPete compiles the mod in place and drops its artifacts here.
 .build/
+
+# The player's saved settings (coop_settings.c). Personal, not source.
+mods/spyro-coop/data/

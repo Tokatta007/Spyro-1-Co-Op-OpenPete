@@ -15,10 +15,6 @@ static uint32_t g_arena_vaddr;  /* a guest address, valid across reloads */
 static uint32_t g_moby_vaddr;   /* the moby partition block, likewise */
 static uint32_t g_extra_vaddr;  /* the third block, likewise */
 static uint32_t g_respawn_vaddr;  /* the fourth block, likewise */
-static int      g_respawn_enabled; /* from config */
-static int      g_hysteresis;       /* percent closer to switch owner, from config */
-static int      g_enabled;      /* from config; re-read on every reload */
-static int      g_draw_enabled; /* from config; the visibility experiment */
 
 CoopArena* coop_arena(void) {
     /* Resolved on every use: the host view is not promised to survive a
@@ -47,19 +43,19 @@ void coop_log(int level, const char* fmt, ...) {
 CoopRespawnArena* coop_respawn_arena(void) {
     return (CoopRespawnArena*)g_api->guest(g_respawn_vaddr);
 }
-int coop_respawn_enabled(void) { return g_respawn_enabled; }
+int coop_respawn_enabled(void) { return g_settings.respawn_modern; }
 
 CoopExtraArena* coop_extra_arena(void) {
     return (CoopExtraArena*)g_api->guest(g_extra_vaddr);
 }
-int coop_hysteresis_percent(void)  { return g_hysteresis; }
+int coop_hysteresis_percent(void)  { return g_settings.hysteresis; }
 
 CoopMobyArena* coop_moby_arena(void) {
     return (CoopMobyArena*)g_api->guest(g_moby_vaddr);
 }
 
-int coop_enabled(void)      { return g_enabled; }
-int coop_draw_enabled(void) { return g_draw_enabled; }
+int coop_enabled(void)      { return (g_settings.players == 2); }
+int coop_draw_enabled(void) { return g_settings.draw_p2; }
 
 /* ------------------------------------------------------------------------
  * Readout
@@ -78,8 +74,8 @@ void coop_publish_status(void) {
     int32_t    p2[3];
     coop_p2_position(p2);
 
-    if (!g_enabled)
-        coop_status("Player 2: OFF (enable it in this mod's settings)");
+    if (g_settings.players != 2)
+        coop_status("Player 2: OFF (players set to 1)");
     else if (A->ready)
         coop_status("Player 2: active in level %d%s",
                          A->last_level, A->handover ? ", handover pending" : "");
@@ -101,15 +97,15 @@ void coop_publish_status(void) {
                      g_stats.view_swaps);
     coop_status("P2 drawn %u times, flame %u times, portal wingman %u times%s",
                      g_stats.p2_draws, g_stats.p2_flame_draws, g_stats.flyin_draws,
-                     g_draw_enabled ? "" : " (drawing OFF in settings)");
+                     g_settings.draw_p2 ? "" : " (drawing OFF in settings)");
     coop_status("Moby passes: two-player %u, single %u; list entries dropped %u",
                      g_stats.moby_two_pass, g_stats.moby_single_pass, g_stats.list_dropped);
     coop_status("P2 Sparx spawns %u, body pushes %u, moby owner flips %u (switch at %d%% closer)",
-                     g_stats.sparx_spawns, g_stats.pushes, g_stats.owner_flips, g_hysteresis);
+                     g_stats.sparx_spawns, g_stats.pushes, g_stats.owner_flips, g_settings.hysteresis);
     coop_status("Mobys in pods (owned as a group): %u, pod merges %u", g_stats.pod_members, g_stats.pod_merges);
     coop_status("Sounds measured from player 2's camera: %u", g_stats.sounds_nearer_p2);
     coop_status("Respawn style: %s; separate respawns %u, double deaths %u, Sparx heals %u",
-                g_respawn_enabled ? "modern" : "original", g_stats.individual_respawns,
+                g_settings.respawn_modern ? "modern" : "original", g_stats.individual_respawns,
                 g_stats.double_deaths, g_stats.sparx_heals);
     for (int i = 0; i < 2; i++)
         coop_status("  P%d camera: on shared vector %u frames, runaway %u frames in %u events, max %u away",
@@ -142,7 +138,7 @@ void coop_publish_status(void) {
                    g_stats.moby_two_pass, g_stats.moby_single_pass,
                    g_stats.list_dropped, g_stats.sparx_spawns, g_stats.pushes,
                    g_stats.owner_flips, g_stats.pod_members,
-                   g_respawn_enabled, g_stats.individual_respawns,
+                   g_settings.respawn_modern, g_stats.individual_respawns,
                    g_stats.double_deaths, g_stats.sparx_heals,
                    g_stats.cam_on_shared[0], g_stats.cam_on_shared[1],
                    g_stats.cam_runaway[0], g_stats.cam_runaway[1],
@@ -169,16 +165,9 @@ int openpete_mod_entry(const openpete_mod_api_t* api, openpete_mod_t* self) {
     g_api  = api;
     g_self = self;
 
-    g_enabled      = api->config_bool(self, "coop.enabled", 1);
-    g_draw_enabled = api->config_bool(self, "coop.draw", 1);
-    g_hysteresis = (int)api->config_int(self, "coop.hysteresis", 25);
-    {
-        char style[16];
-        api->config_str(self, "coop.respawn_style", "modern", style, sizeof style);
-        g_respawn_enabled = strcmp(style, "original") != 0;
-    }
-    if (g_hysteresis < 0)  g_hysteresis = 0;
-    if (g_hysteresis > 50) g_hysteresis = 50;
+    /* Settings from mods/spyro-coop/data/settings.txt, shared by the in-game
+       Multiplayer menu and the M overlay panel (coop_settings.c). */
+    coop_settings_load();
 
     /* One allocation, at entry, every time. The engine replays the
        allocation sequence on reload and hands back the same bytes, so this
@@ -218,7 +207,7 @@ int openpete_mod_entry(const openpete_mod_api_t* api, openpete_mod_t* self) {
     coop_log(OP_MOD_LOG_INFO,
              "spyro-coop phase A up: arena %u bytes at 0x%08X, player 2 %s",
              (unsigned)sizeof(CoopArena), g_arena_vaddr,
-             g_enabled ? "enabled" : "disabled in settings");
+             g_settings.players == 2 ? "enabled" : "off (players = 1)");
     coop_publish_status();
     return 0;
 }

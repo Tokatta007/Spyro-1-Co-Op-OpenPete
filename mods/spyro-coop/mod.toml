@@ -15,14 +15,15 @@
 # uses: `api->guest` - swapping state into and out of the game's own globals
 # uses: `api->call` - running the game's model, shadow and flame renderers for player 2
 # uses: `api->binding_down` - the swap_view development key
-# uses: `api->config_bool` / `config_int` / `config_str` - the settings
+# uses: `api->data_dir` - settings.txt, shared by the in-game menu and the M panel
+# uses: openpete_mod_ui.h - the settings panel in the M overlay
 # uses: `api->register_toggle_hook` - stands player 2 down if the mod is disabled mid-level
 # uses: `api->ui_status` / `api->log` - the readout
 
 [mod]
 id      = "spyro-coop"
 name    = "Spyro Co-Op"
-version = "0.4.2"
+version = "0.5.0"
 game    = "spyro-1"
 api     = 1
 
@@ -41,38 +42,3 @@ runahead = "host-fx"
 name    = "swap_view"
 key     = "P"
 purpose = "switch the camera to the other dragon (development aid)"
-
-[[config]]
-key     = "coop.enabled"
-type    = "bool"
-default = true
-label   = "Player 2"
-group   = "Co-op"
-help    = "Run a second Spyro alongside player 1. Off leaves the game stock."
-
-[[config]]
-key     = "coop.draw"
-type    = "bool"
-default = true
-label   = "Draw player 2"
-group   = "Co-op"
-help    = "Experimental: draw player 2 with the game's own Spyro renderers."
-
-[[config]]
-key     = "coop.hysteresis"
-type    = "int"
-default = 25
-min     = 0
-max     = 50
-label   = "Enemy switch margin (%)"
-group   = "Co-op"
-help    = "How much closer the other dragon must be before an enemy switches to him. 25 is the PS1 value; lower switches sooner (BUGS.md A3)."
-
-[[config]]
-key     = "coop.respawn_style"
-type    = "string"
-default = "modern"
-items   = [ "modern", "original" ]
-label   = "Respawn style"
-group   = "Co-op"
-help    = "Modern: when one dragon dies and the other is alive, only he respawns and one shared life is spent. Original: any death reloads the checkpoint for both, as the original game does."

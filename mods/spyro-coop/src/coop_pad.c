@@ -50,6 +50,9 @@ void coop_pad_status(void) {
 
 static void on_pad_vsync(CPUState* cpu) {
     g_stats.padvsync_calls++;
+    /* Runs every frame in every gamestate, menus included, so it is where an
+       M panel edit is adopted. */
+    coop_settings_tick();
     if (coop_arena()->swapped) {
         g_stats.padvsync_in_swap++;
         if (g_stats.padvsync_in_swap == 1)

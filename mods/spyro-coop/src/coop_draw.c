@@ -32,6 +32,28 @@
 
 #define FLAME_OFF_ACTIVE 0x98  /* g_SpyroFlame.m_IsFlameActive, one byte */
 
+/* ------------------------------------------------------------------------
+ * PER-PLAYER COLOUR. Written into g_Spyro.m_colorFilter, the game's own tint,
+ * immediately before each dragon's model is drawn: the model renderer's
+ * override does it for every call, so the colour is right in gameplay, in
+ * every sequence, and for the portal wingman, without depending on when the
+ * tick last ran (pete.c clears the field on state changes).
+ *
+ * A player at strength 0 is left alone, so the game's own uses of the filter
+ * (the fairy kiss) still show. Only when his strength drops to 0 do we write
+ * once more, to take our tint back off.
+ * ---------------------------------------------------------------------- */
+static int     g_drawing_p2;          /* set while the gameplay draw runs his model */
+static uint8_t g_tint_written[2];     /* last strength written per player */
+
+static void apply_tint(int player) {
+    const uint8_t* c = g_settings.color[player];
+    if (c[3] == 0 && g_tint_written[player] == 0)
+        return;
+    memcpy(guest8(OP_GADDR_g_Spyro + SPYRO_OFF_COLOR_FILTER), c, 4);
+    g_tint_written[player] = c[3];
+}
+
 static void on_glows_and_sparkles(CPUState* cpu) {
     CoopArena* A = coop_arena();
 
@@ -47,7 +69,9 @@ static void on_glows_and_sparkles(CPUState* cpu) {
 
         /* Both checks read HIS state: he is swapped in. */
         if (*guest32(OP_GADDR_g_IsSpyroHidden) == 0) {
+            g_drawing_p2 = 1;                            /* tinted as player 2 */
             g_api->call(cpu, OP_FNADDR_func_80023AC4);   /* model */
+            g_drawing_p2 = 0;
             g_api->call(cpu, OP_FNADDR_func_80059A48);   /* drop shadow */
             g_stats.p2_draws++;
         }
@@ -109,6 +133,8 @@ int coop_draw_install(void) {
 #define FLAME_MATRIX_INTS 5
 
 static void on_spyro_model(CPUState* cpu) {
+    apply_tint(g_drawing_p2 ? 1 : 0);        /* every Spyro draw, everywhere */
+
     if ((cpu->ra != RA_FLYIN_MODEL && cpu->ra != RA_FLYOUT_MODEL) ||
         !coop_enabled() || !coop_draw_enabled()) {
         g_api->base(cpu);
@@ -133,10 +159,21 @@ static void on_spyro_model(CPUState* cpu) {
     pos[1] += right[1];
     pos[2] += right[2];
 
+    /* The wingman is player 2, drawn with player 1's pose: his colour, then
+       player 1's filter bytes put back exactly. */
+    uint8_t* filter = guest8(OP_GADDR_g_Spyro + SPYRO_OFF_COLOR_FILTER);
+    uint8_t  saved_filter[4];
+    memcpy(saved_filter, filter, 4);
+    if (g_settings.color[1][3] != 0)
+        memcpy(filter, g_settings.color[1], 4);
+    else
+        filter[3] = 0;                   /* untinted wingman, even if player 1 is tinted */
+
     load_regs(cpu, &regs);
     g_api->base(cpu);                                  /* the wingman */
     g_stats.flyin_draws++;
 
+    memcpy(filter, saved_filter, 4);
     memcpy(pos, saved_pos, sizeof saved_pos);
     memcpy(mtx, saved_mtx, sizeof saved_mtx);
 }
