@@ -30,6 +30,7 @@ extern openpete_mod_t*           g_self;
  * ---------------------------------------------------------------------- */
 #define RA_GAMEPLAY_SPYRO_TICK 0x80033AE0u  /* jal func_8004A200 at 0x80033AD8 */
 #define RA_GAMEPLAY_CAMERA     0x80033B54u  /* jal CameraUpdate  at 0x80033B4C */
+#define RA_GAMEPLAY_MOBY_UPDATE 0x80033AACu /* jalr g_UpdateMoby at 0x80033AA4 */
 
 /* ------------------------------------------------------------------------
  * Spyro struct offsets. The SDK carries no typed Spyro struct, so these come
@@ -78,6 +79,22 @@ typedef struct {
 } CoopArena;
 
 /* ------------------------------------------------------------------------
+ * Moby partition state. A SEPARATE allocation from CoopArena on purpose: the
+ * engine accepts a savestate only if its allocation ledger is a prefix of the
+ * live one, so appending a block keeps earlier savestates loadable, and
+ * growing the first block would not.
+ * ---------------------------------------------------------------------- */
+#define MOBY_MAX 1024  /* PS1 capped at 512 for space and a rescue overran it */
+
+typedef struct {
+    uint8_t  owner[MOBY_MAX];      /* 0 player 1, 1 player 2, 2 dead slot */
+    uint8_t  stash[MOBY_MAX * 2];  /* m_WasDrawn and m_UpdateDistance while masked */
+    uint32_t p2_sparx;             /* guest Moby*, 0 = none spawned */
+    uint32_t sparx1_seen;          /* last g_Sparx seen: level rebuild detector */
+    uint32_t sparx_spawns_level;   /* spawns since the last rebuild; capped */
+} CoopMobyArena;
+
+/* ------------------------------------------------------------------------
  * Host counters. Display only: they reset after a savestate load, which is
  * acceptable for numbers nobody plays against.
  * ---------------------------------------------------------------------- */
@@ -89,6 +106,8 @@ typedef struct {
     unsigned seeds, level_reseeds, deaths, handovers, teleports;
     unsigned view_swaps;
     unsigned p2_draws, p2_flame_draws;
+    unsigned moby_two_pass, moby_single_pass, moby_fns_hooked;
+    unsigned sparx_spawns, pushes;
     unsigned probe_refusals, query_refusals;
     unsigned padvsync_calls, padvsync_in_swap;
 } CoopStats;
@@ -97,6 +116,7 @@ extern CoopStats g_stats;
 
 /* coop_main.c */
 CoopArena* coop_arena(void);
+CoopMobyArena* coop_moby_arena(void);
 int        coop_enabled(void);
 int        coop_draw_enabled(void);
 void       coop_publish_status(void);
@@ -106,6 +126,13 @@ int  coop_players_install(void);
 void coop_players_disable(void);
 void coop_p2_position(int32_t out[3]);
 void coop_swap_spyro(void);
+void coop_swap_camera(void);
+void coop_handover_resume(void);
+int32_t coop_gamestate(void);
+int32_t coop_level_id(void);
+
+/* coop_mobys.c */
+void coop_mobys_track(void);
 
 /* coop_draw.c */
 int  coop_draw_install(void);
@@ -128,6 +155,18 @@ static inline void save_regs(const CPUState* c, SavedRegs* s) {
 static inline void load_regs(CPUState* c, const SavedRegs* s) {
     c->a0 = s->a0; c->a1 = s->a1; c->a2 = s->a2; c->a3 = s->a3;
     c->v0 = s->v0; c->v1 = s->v1; c->ra = s->ra;
+}
+
+/* Integer square root, for distances without floating point. */
+static inline uint32_t isqrt64(uint64_t v) {
+    uint64_t r = 0, bit = 1ull << 62;
+    while (bit > v) bit >>= 2;
+    while (bit) {
+        if (v >= r + bit) { v -= r + bit; r = (r >> 1) + bit; }
+        else              { r >>= 1; }
+        bit >>= 2;
+    }
+    return (uint32_t)r;
 }
 
 /* Guest memory, by address. Host pointers are valid for this process only,

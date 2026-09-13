@@ -5,9 +5,11 @@
 # input. An experimental draw tries to show him using the game's own Spyro
 # renderers; the swap_view key trades identities either way. It also carries
 # the collision guards, the controller 2 probe, and a measurement of when the
-# game polls input.
+# game polls input. Phase B part 1 adds nearest-player mobys, player 2's own
+# Sparx, and the dragons pushing apart.
 #
 # uses: `api->override_name` - Spyro's tick, CameraUpdate, two collision routines, PadVSync
+# uses: `api->override_addr` - the current level's moby update, attached when first seen
 # uses: `api->base` - called twice per frame in the tick and camera overrides, once per player
 # uses: `api->guest_alloc` - one arena for all per-player state, carried by savestates and rewind
 # uses: `api->guest` - swapping state into and out of the game's own globals
@@ -20,7 +22,7 @@
 [mod]
 id      = "spyro-coop"
 name    = "Spyro Co-Op"
-version = "0.1.0"
+version = "0.2.0"
 game    = "spyro-1"
 api     = 1
 

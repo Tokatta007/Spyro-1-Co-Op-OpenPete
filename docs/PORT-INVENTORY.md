@@ -343,3 +343,54 @@ from bookkeeping a second dragon does not get.
 **Working setup until the engine supports it:** turn interpolation off once
 per launch (there is no startup setting for it, only the runtime toggle), or
 run at 30 FPS. Both dragons are visible either way.
+
+---
+
+## 8. Phase B, part 1: built 2026-09-12, not yet run
+
+Three of the five phase B items, ported together. Individual death and
+respawn is deliberately left for last, as a separate piece.
+
+| Item | File | Ported from |
+| --- | --- | --- |
+| Dragons push apart when they overlap | `coop_players.c`, `separate_players` | `Sp1x2SeparatePlayers` |
+| Every moby updates against its nearest dragon | `coop_mobys.c` | `Sp1x2UpdateMobys`, `Sp1x2AssignMobys`, `Sp1x2MaskWalk` |
+| Player 2's own Sparx | `coop_mobys.c`, `p2_sparx_keep` | `Sp1x2P2SparxKeep` (v4) |
+
+**One design difference forced by OpenPete.** The PS1 build patched the one
+`jalr g_UpdateMoby` instruction. Here, `g_UpdateMoby` points into level code,
+every level's code loads at `0x8007AA38`, and so one address holds different
+functions in different levels. The mod reads the pointer each frame, attaches
+an override the first time it sees a new address, and acts only when called
+from `GamestateUpdate`'s call site (return address `0x80033AAC`, read from the
+retail executable). Called from anywhere else, that address runs stock.
+
+**Deliberately not ported yet:**
+
+- `Sp1x2SparxHeal` (respawning player 1's Sparx). It exists because the PS1
+  individual respawn skips the level reload that normally brings Sparx back.
+  It belongs with individual respawn.
+- `Sp1x2SyncMobyFlags`. It merged "was this moby on screen" across two
+  viewports. With one screen there is one camera, so nothing to merge. A
+  limitation follows: a moby player 1's camera cannot see reads as off screen,
+  and many enemies do not attack while off screen.
+- `Sp1x2FairyMute`. Only needed once a dragon can respawn onto a save-fairy
+  pedestal on his own.
+
+**Allocation ledger.** The moby tables are a second `guest_alloc`, not a larger
+first one, because OpenPete accepts a savestate only if its allocation list is
+a prefix of the live one. Appending keeps earlier savestates loadable.
+
+**A cap of 4 Sparx spawns per level**, logged when reached, so a dragonfly that
+keeps dying for an unknown reason cannot fill the level.
+
+### What to look for
+
+- Enemies near the invisible dragon should react to **him**: chase, attack,
+  flee.
+- A second Sparx following player 2, and no more bouncing between dragons on
+  the view swap key.
+- Walking into each other should push the dragons apart instead of overlapping.
+- In the readout: `Moby passes: two-player` climbing in levels, `single` in
+  flight levels and menus; `update functions hooked` about one per level
+  visited; `P2 Sparx spawns` about one per level.

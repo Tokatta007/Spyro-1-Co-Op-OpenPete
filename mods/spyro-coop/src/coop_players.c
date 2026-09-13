@@ -17,8 +17,8 @@
  *
  * PHASE A LIMITS, deliberate:
  *   - player 2 borrows player 1's input (no second controller yet, B1)
- *   - drawing him is a separate experiment, in coop_draw.c
- *   - no nearest-player enemies, individual respawn, Sparx or body push (B)
+ *   - drawing him is in coop_draw.c; enemies and Sparx are in coop_mobys.c
+ *   - no individual respawn yet (phase B, last)
  */
 
 #include "coop.h"
@@ -146,6 +146,9 @@ static void swap_all(CoopArena* A) {
 
 static int32_t gamestate(void) { return *guest32(OP_GADDR_g_Gamestate); }
 static int32_t level_id(void)  { return *guest32(OP_GADDR_g_LevelId); }
+int32_t coop_gamestate(void)   { return gamestate(); }
+int32_t coop_level_id(void)    { return level_id(); }
+void coop_swap_camera(void)    { swap_camera(coop_arena()); }
 static int32_t* live_position(void) {
     return guest32(OP_GADDR_g_Spyro + SPYRO_OFF_POSITION);
 }
@@ -222,6 +225,9 @@ static void seed_player2(CoopArena* A) {
  * Handover and teleport detection, ported from Sp1x2HandoverResume.
  * Runs before anything else in the gameplay tick.
  * ---------------------------------------------------------------------- */
+static void handover_resume(CoopArena* A);
+void coop_handover_resume(void) { handover_resume(coop_arena()); }
+
 static void handover_resume(CoopArena* A) {
     int32_t gs = gamestate();
     if (gs != GS_PLAYING)
@@ -271,6 +277,53 @@ static void handover_resume(CoopArena* A) {
         resample_teleport(A);
     }
     A->handover = 0;
+}
+
+/* ------------------------------------------------------------------------
+ * Body separation, ported from Sp1x2SeparatePlayers.
+ *
+ * Spyro is not a moby, so none of the game's actor collision applies between
+ * the two dragons. Our own design on PS1, since Spyro2x2 let his dragons pass
+ * through each other: after both have ticked, if they overlap horizontally,
+ * push each half the overlap apart along the line between them.
+ *   - horizontal only (z is up): pushing vertically launches or buries them
+ *   - position, not velocity: a velocity nudge felt mushy and fought physics
+ *   - never in flight levels, where they fly side by side constantly; the push
+ *     fighting flight physics every frame was what damped vertical steering
+ * ---------------------------------------------------------------------- */
+#define BODY_RADIUS 0x1A0  /* 416 units centre to centre */
+#define BODY_HEIGHT 0x2A0  /* ignore each other beyond this height gap */
+
+static void separate_players(CoopArena* A) {
+    if (!A->ready || gamestate() != GS_PLAYING || *guest32(OP_GADDR_g_IsFlightLevel) != 0)
+        return;
+
+    int32_t* p1 = live_position();
+    int32_t* p2 = (int32_t*)(A->spyro + SPYRO_OFF_POSITION);
+    int32_t d[3] = { p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2] };
+
+    /* Cheap rejects first, which also keep the arithmetic in range. */
+    if (d[0] > BODY_RADIUS || d[0] < -BODY_RADIUS ||
+        d[1] > BODY_RADIUS || d[1] < -BODY_RADIUS ||
+        d[2] > BODY_HEIGHT || d[2] < -BODY_HEIGHT)
+        return;
+
+    int32_t dist = (int32_t)isqrt64((uint64_t)((int64_t)d[0] * d[0] + (int64_t)d[1] * d[1]));
+    if (dist >= BODY_RADIUS)
+        return;
+    g_stats.pushes++;
+    if (dist <= 0) {
+        /* Exactly coincident: pick an axis so they cannot lock together. */
+        p1[0] -= BODY_RADIUS / 2;
+        p2[0] += BODY_RADIUS / 2;
+        return;
+    }
+    int32_t overlap = BODY_RADIUS - dist;
+    for (int i = 0; i < 2; i++) {
+        int32_t push = (d[i] * overlap) / (dist * 2);
+        p1[i] -= push;
+        p2[i] += push;
+    }
 }
 
 /* ------------------------------------------------------------------------
@@ -399,6 +452,9 @@ static void on_spyro_tick(CPUState* cpu) {
     }
 
     swap_all(A);
+
+    /* Both dragons have moved this frame: resolve any overlap. */
+    separate_players(A);
     maybe_swap_view(A);
 }
 
@@ -410,6 +466,7 @@ static void on_camera_update(CPUState* cpu) {
         g_stats.camera_other++;
         g_stats.camera_other_ra = cpu->ra;
         g_api->base(cpu);
+        coop_mobys_track();
         coop_publish_status();
         return;
     }
@@ -438,6 +495,7 @@ static void on_camera_update(CPUState* cpu) {
     }
 
     coop_pad_sample();
+    coop_mobys_track();
     coop_publish_status();
 }
 
