@@ -249,3 +249,26 @@ These cost the PS1 project real time and apply to any construction:
 5. Does `PadVSync` ever run inside the swap window? (Decides whether phase C
    needs the deferred poll.)
 6. Do the collision guards ever refuse anything?
+
+### Results, first session, 2026-09-12
+
+About 400 seconds and 23,791 frames, in the Artisans homeworld (level 10),
+through a portal into level 11, with the mod toggled off and on once.
+
+| Question | Answer |
+| --- | --- |
+| 1. Engine accepts it? | **Yes.** No warning, refusal or divergence report from the engine. Its only warning was a startup frame-pacing slip that also appeared before the mod existed. |
+| 2. Stable? | **Yes.** No crash or freeze, 100 FPS against a 100 FPS target. |
+| 3. Separate body? | **Yes.** The dragons started 640 apart and reached **55,996** apart while following identical input. Heard: both dragons' wall-bump sounds on a charge. Seen: the invisible dragon killed an enemy. |
+| 4. Return addresses as predicted? | **Yes.** Every gameplay call matched. The other callers seen were the tick at `ra 0x8002E010` (35 calls) and the camera update at `ra 0x8002E018`, both inside `func_8002E000`, gamestate 9, exactly as section 2 lists. They got stock behaviour. |
+| 5. `PadVSync` inside the swap window? | **Never.** 0 of about 24,000 calls. Phase C very likely does not need the deferred poll. |
+| 6. Collision guards refuse anything? | **No.** 0 and 0. |
+
+Also confirmed: the level change was caught by the teleport detector and
+player 2 was reseeded in level 11 (`teleports=1`, `seeds=3`); toggling the mod
+off and on reseeded him cleanly; the swap_view key traded identities 67 times
+without incident.
+
+**Not yet exercised:** a death (`deaths=0`), a sequence started by the
+*shadow* dragon (`handovers=0`; the portal was entered by the live one), and
+the dragon rescue caller (gamestate 8). Those are the next things to provoke.

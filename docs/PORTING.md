@@ -243,8 +243,10 @@ pickup text, speedway counter layout) are documented in the PS1 repository's
    viewport, two players, prove the second Spyro ticks and responds.
    **Inventoried and built 2026-09-12 as phase A** of
    [PORT-INVENTORY.md](PORT-INVENTORY.md), with player 2 borrowing player 1's
-   input so it does not wait on B1. Compiles clean against the v0.3.0 SDK;
-   not yet run.
+   input so it does not wait on B1. **First session 2026-09-12: the engine
+   accepted two ticks per frame with no complaint, the game stayed stable, and
+   player 2 moved as a genuinely separate body.** That settles B2 in practice.
+   Results in PORT-INVENTORY.md §6.
 4. Settle **B3**, and if it holds, a first split-screen.
 5. **B4** for four-player.
 

@@ -86,8 +86,10 @@ These are tracked properly in `docs/PORTING.md` §3. In short:
    reports it in the Mods panel.
 2. **Does the engine tolerate running the tick twice per frame?** Phase A of
    `docs/PORT-INVENTORY.md` answers this, with player 2 borrowing player 1's
-   input. Built 2026-09-12, not yet run. Section 6 of that file lists exactly
-   what the first session should read off the panel and log.
+   input. **Answered 2026-09-12: yes.** No engine complaint over 23,791 frames,
+   stable, and the dragons diverged to 55,996 units apart on identical input.
+   Death and shadow-dragon handovers not yet exercised. Results in section 6
+   of that file.
 3. **Can a mod drive two scene builds through `api->call`?**
 4. **Per-pass rendering**. Not ours, no date. Four-player depends on it.
 
