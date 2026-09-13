@@ -88,14 +88,16 @@ follow their dragons across the view key. Cause and fix: OpenPete's native
 rebuild of Spyro takes one colour per renderer call, from the last dragon drawn
 in it, so every extra dragon is its own call, drawn before the camera's dragon.
 
-### C3. Spyro is purple in a dragon's dialogue: diagnosing
+### C3. Spyro is purple in a dragon's dialogue: ENGINE SIDE, for the author
 
-v0.5.2 fixed the walk into position, but the user still sees Spyro's own
-purple in the conversation itself, and his colour again afterwards. The retail
-renderer applies the filter on every path through it, so either the dialogue
-draws him some other way or OpenPete treats that draw differently. v0.5.3 logs
-each distinct call site of the model renderer during gamestate 8, with the
-filter going in and the far colour coming out.
+Measured 2026-09-13 (v0.5.3 diagnostic). During a dragon rescue the model
+renderer was called from three sites, `0x8001D180`, `0x8001D4B8` and
+`0x8001D5D4`, every time with the player's filter going in (`9700FF00`,
+green) and the retail renderer's GTE far colour coming out green. The user
+still saw purple in the conversation. So the mod's colour reaches the game's
+renderer, and OpenPete's native rebuild of Spyro does not apply the filter in
+these scenes, although it does in gameplay and the portal sequences. Nothing
+the mod can reach; include it in the note to the OpenPete author.
 
 ### M3. Sounds from player 2's side: BUILT in v0.4.2, awaiting test
 
@@ -155,25 +157,22 @@ can hesitate before attacking again. It does attack eventually, and it is hard
 to reproduce. Likely its pod changing owner as the two distances cross the
 switch margin. Accepted by the user as not worth chasing for now.
 
-### X4. Dragons stacked on the portal screen when entering a level: new approach in v0.5.3
+### X4. Dragons stacked on the portal transition screen: trailing formation in v0.5.4
 
-Screenshots 2026-09-13, all on the "Entering Stone Hill" transition: the
-wingman sits behind and below the leader, and widening the gap to 1,024 made
-it look worse. Leaving a level looks fine.
+Screenshots 2026-09-13 on "Entering Stone Hill". The transition is staged: Spyro
+is parked and the camera orbits him, so no single "beside him" survives every
+angle.
 
-**Cause, from the PS1 notes.** The transition is staged: Spyro is parked and
-the camera orbits him. The wingman went along Spyro's wing line, a rigid
-formation that turns with him. Whenever the orbit views him side-on, that
-line points along the view, so the wingman lines up behind him. The PS1 build
-had the same geometry; it only made the nearer dragon draw over the farther
-one (no depth buffer there), which hides the flicker but not the stacking.
+| Version | Wingman placed | Result |
+| --- | --- | --- |
+| PS1, v0.5.2 | along Spyro's wing line | stacks behind him whenever the orbit views him side-on |
+| v0.5.3 | square to the camera's view | side by side on screen, but no longer turns with him; user judged it worse |
+| **v0.5.4** | **behind, out along the wing line, and lower** | awaiting test |
 
-**v0.5.3:** in the transition only, the wingman goes along the horizontal
-direction square to the camera's view, so he is always beside the leader on
-screen. PS1 tried and rejected this for sliding around the dragon as the camera
-orbits; in the tunnel there is no scenery to show that. The landing and the
-level exit keep the wing line, since they have ground and the landing must
-match where play starts. This also extends naturally to a row of four.
+The trailing formation still turns with him. Side-on it is staggered front to
+back, from ahead or behind it is apart side to side, and the drop keeps the two
+from lining up in between. Tunnel only; the landing and level exit keep the
+wing line. The three distances are constants at the top of `tunnel_offset`.
 
 ### X2. Player 2 copies player 1's controls
 
