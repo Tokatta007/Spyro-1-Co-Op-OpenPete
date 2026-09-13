@@ -39,7 +39,7 @@ cannot be on one screen.
 
 ## 2. Missing, planned
 
-### M5. In-game Multiplayer and Color menus: stages 1 to 3 BUILT (v0.6.0), awaiting test
+### M5. In-game Multiplayer and Color menus: all 4 stages BUILT (v0.7.0)
 
 Decided with the user 2026-09-13. The mod should be fully playable from a couch
 with controllers, so every player-facing setting must be reachable in game.
@@ -75,11 +75,16 @@ with controllers, so every player-facing setting must be reachable in game.
    dragons") and SPLIT. TRIANGLE or DONE goes back one level.
 3. **Built (v0.6.0), widened in v0.6.1:** the Colors page: RED, GREEN, BLUE,
    STRENGTH for P1 to P4, LEFT/RIGHT by one, L2/R2 by 16, SQUARE resets the
-   column. The title row holds a swatch per player showing the blended
-   result. Columns for players beyond the PLAYERS setting are grey, dimmed and
+   column. Columns for players beyond the PLAYERS setting are grey and
    skipped by the cursor. Settings now keep four colours.
-4. Spinning Spyro previews, in the Colors title row. Not started; on PS1 the
-   dragons never drew because the paused world is a stored picture.
+4. **Built (v0.7.0): spinning dragon previews** above the Colors box, one per
+   column in that player's colour, inactive players as dark silhouettes. They
+   replaced the flat swatches. Possible on OpenPete because the native renderer
+   rebuilds Spyro from each model-renderer call even on the pause screen; on
+   PS1, and in PsyCross, the paused world is a stored picture and nothing
+   draws. Placement, spin field and the colour hook exemption are documented
+   in `coop_menu.c`. Not yet seen: how they behave with frame interpolation
+   on, which drops extra dragons from in-between frames in gameplay (X1).
 
 Checked headless 2026-09-13 with screenshots (`--skip-to-level artisans` and a
 scripted movie): the list with five rows and a grown box, the shimmer on
@@ -97,7 +102,8 @@ window while the text, box and lines stay in the centred 4:3 area, so the
 swatches slid out of their frames on an ultrawide screen. Their corners are now
 squeezed by that stretch, from the window aspect the present hook reports.
 Gradient quads and TILE sprites were tried as swatches and do not draw in the
-native pause view at all.
+native pause view at all. (The swatches were then replaced by the dragons in
+v0.7.0, which, being 3D models, need no squeeze.)
 
 ### C1. Colour follows the slot, not the dragon: FIXED in v0.5.1, awaiting test
 

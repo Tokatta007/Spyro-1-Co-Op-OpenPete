@@ -223,7 +223,7 @@ static void draw_wingman(CPUState* cpu, int32_t* pos, int32_t* mtx, uint8_t* fil
 }
 
 static void on_spyro_model(CPUState* cpu) {
-    if (g_in_extra_draw) {
+    if (g_in_extra_draw || coop_menu_drawing_preview()) {
         g_api->base(cpu);                    /* a call we made: colour already set */
         return;
     }

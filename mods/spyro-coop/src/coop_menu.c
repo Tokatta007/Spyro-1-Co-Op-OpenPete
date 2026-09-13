@@ -20,7 +20,7 @@
  *     rewritten at those call sites, which grows the small box by a row, or
  *     resizes it for one of our pages;
  *   - the big title, func_80017FE4 ("PAUSED"), reads MULTIPLAYER on that page
- *     and is left out on the Colors page, whose swatches take its row;
+ *     and is left out on the Colors page, where spinning dragons take its row;
  *   - the text builder, func_800181AC, is called for each pause-list row. At
  *     the last row we draw MULTIPLAYER and the last row one line lower; while a
  *     page is open the stock rows are skipped and the page is drawn there.
@@ -87,10 +87,14 @@ enum { MP_PLAYERS, MP_RESPAWN, MP_SPLIT, MP_COLORS, MP_DONE, MP_ROWS };
 #define COLOR_CELLS COOP_MAX_PLAYERS * 4
 #define COLOR_DONE  COLOR_CELLS
 
-typedef struct { int left, right, bottom; } Box;
+typedef struct { int left, top, right, bottom; } Box;
 
-static const Box k_box_multiplayer = { 84, 428, 188 };  /* the options screen's width */
-static const Box k_box_colors      = { 36, 476, 196 };  /* wide enough for four columns */
+#define STOCK_TOP 67
+static const Box k_box_multiplayer = { 84, STOCK_TOP, 428, 188 };  /* the options screen's width */
+/* Wide enough for four columns, and starting below the preview dragons: the
+   box's fill darkens whatever is drawn under it, and dragons inside it were
+   near-black silhouettes (seen 2026-09-13). */
+static const Box k_box_colors      = { 36, 100, 476, 200 };
 
 static uint32_t g_menu_vaddr;
 static int      g_in_menu_call;    /* inside a call we made: stock behaviour */
@@ -169,12 +173,6 @@ static int text_span(const char* s, int advance, int size) {
 
 static Built text_centred(CPUState* cpu, const char* s, int cx, int y, int shade) {
     return text(cpu, s, cx - text_span(s, 15, 16) / 2, y, 0x1400, 15, 16, shade);
-}
-
-static void box_line(CPUState* cpu, int x0, int y0, int x1, int y1) {
-    cpu->a0 = (uint32_t)x0; cpu->a1 = (uint32_t)y0;
-    cpu->a2 = (uint32_t)x1; cpu->a3 = (uint32_t)y1;
-    game_call(cpu, OP_FNADDR_func_8001844C);
 }
 
 static void chime(CPUState* cpu, int which) {
@@ -365,9 +363,9 @@ static void on_pause_update(CPUState* cpu) {
  * Drawing: the pages
  * ---------------------------------------------------------------------- */
 
-static void hint(CPUState* cpu, const char* s) {
+static void hint(CPUState* cpu, const char* s, int y) {
     /* Narrower spacing so a long line fits under the box, as on PS1. */
-    text(cpu, s, 256 - text_span(s, 12, 13) / 2, 206, 0x1100, 12, 13, SHADE_NORMAL);
+    text(cpu, s, 256 - text_span(s, 12, 13) / 2, y, 0x1100, 12, 13, SHADE_NORMAL);
 }
 
 static void draw_multiplayer(CPUState* cpu) {
@@ -393,10 +391,10 @@ static void draw_multiplayer(CPUState* cpu) {
         if (r == m->cursor) { sel_label = l; sel_value = v; }
     }
     if (m->cursor == MP_SPLIT)
-        hint(cpu, "SPLIT SCREEN IS NOT AVAILABLE YET");
+        hint(cpu, "SPLIT SCREEN IS NOT AVAILABLE YET", 206);
     else if (m->cursor == MP_RESPAWN)
         hint(cpu, g_settings.respawn_modern ? "DEATH CAUSES INDIVIDUAL RESPAWN"
-                                            : "DEATH RESTARTS BOTH DRAGONS");
+                                            : "DEATH RESTARTS BOTH DRAGONS", 206);
     wobble(sel_label, 0);
     wobble(sel_value, sel_label.count);
 }
@@ -404,74 +402,6 @@ static void draw_multiplayer(CPUState* cpu) {
 /* Colors page columns, one per player, and the rows. */
 static const int k_col_x[COOP_MAX_PLAYERS] = { 216, 280, 344, 408 };
 #define COLOR_LABEL_X  48
-#define SWATCH_TOP     72     /* in the title row, where PAUSED would be */
-#define SWATCH_BOTTOM  92
-#define SWATCH_HALF_W  22
-
-static const uint8_t k_swatch_base[3] = { 0x78, 0x58, 0xA8 };   /* his skin, roughly */
-
-/* The window's width over its height, from the present hook. Host state and
-   display-only: it moves where a swatch quad is drawn and nothing else. */
-static volatile float g_window_aspect;
-
-static void on_present(const openpete_present_ctx_t* ctx) {
-    g_window_aspect = ctx->aspect;
-}
-
-/* The native view stretches a flat quad by (window aspect) / (the 4:3 area's
-   aspect). That area is 4:3 over 224 of the 240 lines, so its own aspect is
-   4/3 * 240/224; the measured stretch at 21:9 (window 1120x448) was 1.75,
-   which this gives. A window narrower than that area shows no stretch. */
-static int squeeze_x(int x) {
-    float k = g_window_aspect / (4.0f / 3.0f * 240.0f / 224.0f);
-    if (!(k > 1.0f))
-        return x;
-    return 256 + (int)((float)(x - 256) / k);
-}
-
-/* A flat quad showing what the tint does to him: Spyro's colour blended
-   toward the chosen one by the strength, the way the filter blends. The PS1
-   build's answer to the preview dragons that never drew. A player who is not
-   in the game gets a darkened swatch, like his greyed column. */
-static void swatch(CPUState* cpu, int player, int cx) {
-    const uint8_t* c = g_settings.color[player];
-    uint32_t f4 = *(uint32_t*)g_api->guest(OP_GADDR_D_800757B0);   /* primitive cursor */
-    uint8_t* p = guest8(f4);
-    int x0 = cx - SWATCH_HALF_W, x1 = cx + SWATCH_HALF_W;
-    int active = player < g_settings.players;
-
-    uint8_t rgb[3];
-    for (int i = 0; i < 3; i++) {
-        int v = k_swatch_base[i] + ((c[i] - k_swatch_base[i]) * c[3]) / 255;
-        rgb[i] = (uint8_t)(active ? v : v / 3);
-    }
-    /* THE QUAD IS SQUEEZED, THE FRAME IS NOT. In a wide window the native
-       renderer places this quad as if the 512-wide screen were stretched over
-       the whole window, while the frame's lines, the box and the text stay in
-       the centred 4:3 area (measured at 21:9, 2026-09-13: the quad's corners
-       landed at x * width / 512). So its corners are pulled toward the centre
-       by that stretch, and it lands inside its frame at any window shape. */
-    int qx0 = squeeze_x(x0), qx1 = squeeze_x(x1);
-    memset(p, 0, 24);
-    uint32_t tag = 0x05000000u;
-    memcpy(p, &tag, 4);
-    memcpy(p + 4, rgb, 3);
-    p[7] = 0x28;                             /* POLY_F4, opaque */
-    int16_t xy[8] = { (int16_t)qx0, SWATCH_TOP,    (int16_t)qx1, SWATCH_TOP,
-                      (int16_t)qx0, SWATCH_BOTTOM, (int16_t)qx1, SWATCH_BOTTOM };
-    memcpy(p + 8, xy, sizeof xy);
-
-    cpu->a0 = f4;
-    game_call(cpu, OP_FNADDR_func_800168DC);            /* link it */
-    *(uint32_t*)g_api->guest(OP_GADDR_D_800757B0) = f4 + 24;
-
-    /* Framed with the box's own line routine, for the same shimmering gold. */
-    box_line(cpu, x0, SWATCH_TOP, x1, SWATCH_TOP);
-    box_line(cpu, x1, SWATCH_TOP, x1, SWATCH_BOTTOM);
-    box_line(cpu, x1, SWATCH_BOTTOM, x0, SWATCH_BOTTOM);
-    box_line(cpu, x0, SWATCH_BOTTOM, x0, SWATCH_TOP);
-}
-
 static Built number(CPUState* cpu, int v, int cx, int y, int shade) {
     char s[4];
     int i = 0;
@@ -482,16 +412,115 @@ static Built number(CPUState* cpu, int v, int cx, int y, int shade) {
     return text_centred(cpu, s, cx, y, shade);
 }
 
+/* ------------------------------------------------------------------------
+ * THE SPINNING DRAGONS (2026-09-13). Each column's player, in his colour,
+ * turning in the title row.
+ *
+ * WHY THIS WORKS HERE AND NEVER DID ON PS1. The paused world is a stored
+ * picture: no 3D scene is built, so on PS1 (and in PsyCross) the model
+ * renderer's output goes nowhere. OpenPete's native renderer rebuilds Spyro
+ * from each call of that renderer, and does so on the pause screen too: a
+ * probe drew two dragons at once. PsyCross still shows nothing, so the
+ * swatches stay as the preview there.
+ *
+ * PLACEMENT, measured with probes. The model renderer maps a world offset w
+ * from the camera to camera space through g_Camera's view matrix (+0x14) with
+ * the world axes reordered, as (-w.y, -w.z, w.x): so the world directions of
+ * the camera's axes are, from its rows r0 (right), r1 (down) and r2 (forward),
+ * (r.z, -r.x, -r.y). A point at depth D lands at screen x 256 + a*H/D and
+ * y 120 + b*H*0.625/D (the projection's Y row is scaled by 320/512), where a
+ * and b are its right and down offsets and H is the GTE projection distance.
+ * Two probes, at Spyro's own position and at camera-relative offsets, landed
+ * within a few pixels of this. So each dragon is placed for its column's x
+ * and the title row's y, whichever way the camera faced when the game paused.
+ *
+ * BuildCameraViewMatrix is called first, as the Game Over screen does before
+ * its own spinning Spyro. Everything borrowed from g_Spyro is put back.
+ *
+ * COLOUR. Each dragon's filter is written before its own call, and the co-op
+ * draw hook (coop_draw.c), which stamps player 1's colour on every model draw
+ * it did not start, is told to leave these alone: before it was, all four came
+ * out player 1's green. Dragons drawn under the box's fill came out as dark
+ * silhouettes, so the Colors box starts below them. They replace the flat
+ * swatches, which PsyCross would still have shown: in PsyCross this row is
+ * empty.
+ * ---------------------------------------------------------------------- */
+#define PREVIEW_DEPTH    4800   /* how far in front of the camera: sets their size */
+#define PREVIEW_ROW_Y    72     /* screen y: between the HUD and the top of the box */
+#define PREVIEW_SPIN     16     /* yaw per pause tick; 0x1000 is a full turn */
+
+static int g_drawing_preview;
+int coop_menu_drawing_preview(void) { return g_drawing_preview; }
+
+static void preview_dragons(CPUState* cpu, const int cols[], int count) {
+    int32_t* pos    = guest32(OP_GADDR_g_Spyro + SPYRO_OFF_POSITION);
+    int32_t* yaw    = guest32(OP_GADDR_g_Spyro + SPYRO_OFF_YAW);
+    uint8_t* filter = guest8(OP_GADDR_g_Spyro + SPYRO_OFF_COLOR_FILTER);
+    int32_t* mtx    = guest32(OP_GADDR_g_SpyroFlame + 0xB8);     /* flame chain, 5 ints */
+    uint8_t* body   = guest8(OP_GADDR_g_Spyro + 0x0C);          /* m_bodyRotation x, y, z */
+    int32_t  saved_pos[3], saved_yaw = *yaw, saved_mtx[5];
+    uint8_t  saved_body[3];
+    memcpy(saved_body, body, 3);
+    uint8_t  saved_filter[4];
+    memcpy(saved_pos, pos, sizeof saved_pos);
+    memcpy(saved_mtx, mtx, sizeof saved_mtx);
+    memcpy(saved_filter, filter, 4);
+
+    game_call(cpu, OP_FNADDR_func_80033C50);            /* BuildCameraViewMatrix */
+
+    const int16_t* vm  = (const int16_t*)g_api->guest(OP_GADDR_g_Camera + 0x14);
+    const int32_t* cam = guest32(OP_GADDR_g_Camera + CAMERA_OFF_POSITION);
+    int32_t h = (int32_t)cpu->gte_ctrl[26];
+    if (h <= 0)
+        h = 341;
+    /* World directions of the camera's right, down and forward axes. */
+    int32_t axis[3][3];
+    for (int k = 0; k < 3; k++) {
+        const int16_t* r = vm + 3 * k;
+        axis[k][0] = r[2]; axis[k][1] = -r[0]; axis[k][2] = -r[1];
+    }
+    int64_t down = (int64_t)(PREVIEW_ROW_Y - 120) * PREVIEW_DEPTH * 512 / ((int64_t)h * 320);
+    int32_t spin = (*guest32(OP_GADDR_D_800758B8) * PREVIEW_SPIN) & 0xFFF;
+
+    for (int p = 0; p < count; p++) {
+        int64_t right = (int64_t)(cols[p] - 256) * PREVIEW_DEPTH / h;
+        for (int i = 0; i < 3; i++)
+            pos[i] = cam[i] + (int32_t)((axis[2][i] * (int64_t)PREVIEW_DEPTH +
+                                         axis[0][i] * right + axis[1][i] * down) / 4096);
+        /* The renderer turns him by m_bodyRotation.z (256 to the turn); the
+           physics heading at +0x11C does nothing here. Staggered, so the four
+           do not turn in lockstep. */
+        int turn = (spin + p * 0x400) & 0xFFF;
+        body[2] = (uint8_t)(turn >> 4);
+        *yaw = turn;
+        if (p < g_settings.players) {
+            memcpy(filter, g_settings.color[p], 4);
+        } else {
+            static const uint8_t dim[4] = { 0x10, 0x10, 0x14, 0xE8 };   /* not in the game */
+            memcpy(filter, dim, 4);
+        }
+        g_drawing_preview = 1;               /* the co-op draw hook leaves its colour alone */
+        game_call(cpu, OP_FNADDR_func_80023AC4);
+        g_drawing_preview = 0;
+    }
+
+    memcpy(pos, saved_pos, sizeof saved_pos);
+    *yaw = saved_yaw;
+    memcpy(body, saved_body, 3);
+    memcpy(mtx, saved_mtx, sizeof saved_mtx);
+    memcpy(filter, saved_filter, 4);
+}
+
 static void draw_colors(CPUState* cpu) {
     CoopMenuArena* m = M();
     static const char* const labels[4] = { "RED", "GREEN", "BLUE", "STRENGTH" };
     static const char* const heads[COOP_MAX_PLAYERS] = { "P1", "P2", "P3", "P4" };
-    static const int y[4] = { 122, 136, 150, 164 };
+    static const int y[4] = { 128, 142, 156, 170 };
 
     Built sel = { 0, 0 };
     for (int p = 0; p < COOP_MAX_PLAYERS; p++) {
         int shade = (p < g_settings.players) ? SHADE_NORMAL : SHADE_DISABLED;
-        text_centred(cpu, heads[p], k_col_x[p], 108, shade);
+        text_centred(cpu, heads[p], k_col_x[p], 112, shade);
         for (int k = 0; k < 4; k++) {
             Built b = number(cpu, g_settings.color[p][k], k_col_x[p], y[k], shade);
             if (m->cursor == p * 4 + k)
@@ -500,14 +529,13 @@ static void draw_colors(CPUState* cpu) {
     }
     for (int k = 0; k < 4; k++)
         text(cpu, labels[k], COLOR_LABEL_X, y[k], 0x1400, 15, 16, SHADE_NORMAL);
-    Built done = text(cpu, "DONE", COLOR_LABEL_X, 178, 0x1400, 15, 16, SHADE_NORMAL);
+    Built done = text(cpu, "DONE", COLOR_LABEL_X, 186, 0x1400, 15, 16, SHADE_NORMAL);
     if (m->cursor == COLOR_DONE)
         sel = done;
 
-    hint(cpu, "L2 R2 FAST  SQUARE RESET");
-    for (int p = 0; p < COOP_MAX_PLAYERS; p++)
-        swatch(cpu, p, k_col_x[p]);
+    hint(cpu, "L2 R2 FAST  SQUARE RESET", 214);
     wobble(sel, 0);
+    preview_dragons(cpu, k_col_x, COOP_MAX_PLAYERS);   /* last: it rebuilds the camera matrix */
 }
 
 /* ------------------------------------------------------------------------
@@ -587,7 +615,7 @@ static void on_title(CPUState* cpu) {
         return;
     }
     if (M()->page == PAGE_COLORS)
-        return;                              /* the swatches take this row */
+        return;                              /* the preview dragons take this row */
 
     CoopMenuArena* m = M();
     m->scratch_used = 0;
@@ -610,22 +638,29 @@ static void on_box_line(CPUState* cpu) {
     }
     const Box* box = page_box();
     int left   = box ? box->left : 140;
+    int top    = box ? box->top : STOCK_TOP;
     int right  = box ? box->right : 372;
     int bottom = box ? box->bottom : SMALL_BOTTOM;
 
     switch (ra) {
     case RA_BOX_SEPARATOR:
-        if (box) {                           /* under the whole title, or the swatches */
-            cpu->a0 = (uint32_t)(M()->page == PAGE_COLORS ? left + 12 : 128);
-            cpu->a2 = (uint32_t)(M()->page == PAGE_COLORS ? right - 12 : 384);
+        if (M()->page == PAGE_COLORS) {      /* under the P1..P4 headers */
+            cpu->a0 = (uint32_t)(left + 12);  cpu->a1 = 121;
+            cpu->a2 = (uint32_t)(right - 12); cpu->a3 = 121;
+        } else if (box) {                    /* under the whole title */
+            cpu->a0 = 128;
+            cpu->a2 = 384;
         }
         break;
     case RA_BOX_TOP:
         cpu->a0 = (uint32_t)left;
+        cpu->a1 = (uint32_t)top;
         cpu->a2 = (uint32_t)right;
+        cpu->a3 = (uint32_t)top;
         break;
     case RA_BOX_RIGHT:
         cpu->a0 = (uint32_t)right;
+        cpu->a1 = (uint32_t)top;
         cpu->a2 = (uint32_t)right;
         cpu->a3 = (uint32_t)bottom;
         break;
@@ -639,6 +674,7 @@ static void on_box_line(CPUState* cpu) {
         cpu->a0 = (uint32_t)left;
         cpu->a1 = (uint32_t)bottom;
         cpu->a2 = (uint32_t)left;
+        cpu->a3 = (uint32_t)top;
         break;
     }
     g_api->base(cpu);
@@ -656,7 +692,8 @@ static void on_link_prim(CPUState* cpu) {
     const Box* box = page_box();
     int16_t* xy = (int16_t*)g_api->guest(cpu->a0 + 8);   /* POLY_F4 x/y pairs */
     if (box) {
-        xy[0] = (int16_t)box->left;  xy[2] = (int16_t)box->right;
+        xy[0] = (int16_t)box->left;  xy[1] = (int16_t)box->top;
+        xy[2] = (int16_t)box->right; xy[3] = (int16_t)box->top;
         xy[4] = (int16_t)box->left;  xy[6] = (int16_t)box->right;
     }
     xy[5] = (int16_t)(box ? box->bottom : SMALL_BOTTOM);  /* y2 */
@@ -670,8 +707,7 @@ int coop_menu_install(uint32_t menu_vaddr) {
         g_api->override_name(g_self, "func_800181AC", on_text_sprites) != 0 ||
         g_api->override_name(g_self, "func_80017FE4", on_title) != 0 ||
         g_api->override_name(g_self, "func_8001844C", on_box_line) != 0 ||
-        g_api->override_name(g_self, "func_800168DC", on_link_prim) != 0 ||
-        g_api->register_present_hook(g_self, on_present) != 0) {
+        g_api->override_name(g_self, "func_800168DC", on_link_prim) != 0) {
         coop_log(OP_MOD_LOG_ERROR, "could not install the Multiplayer menu");
         return 1;
     }

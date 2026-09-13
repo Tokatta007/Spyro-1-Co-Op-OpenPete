@@ -248,6 +248,7 @@ void coop_tint_state(void);    /* keep both dragons' colour in game state */
 
 /* coop_menu.c */
 int  coop_menu_install(uint32_t menu_vaddr);
+int  coop_menu_drawing_preview(void);  /* the Colors page is drawing a preview dragon */
 
 /* coop_gates.c */
 int  coop_gates_install(void);
