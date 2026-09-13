@@ -166,8 +166,9 @@ int coop_draw_install(void) {
  * sideways. Player 2's own state is not used: in these sequences he has no
  * meaningful pose of his own, and the two dragons look identical anyway.
  *
- * The wingman is his own call of the renderer, drawn before the lead: see
- * DRAW ORDER MATTERS above. (Calling base() twice inside one call was tried
+ * The wingman is his own call of the renderer, and whichever dragon is
+ * farther from the camera is drawn first: see THE PORTAL PAIR below and DRAW
+ * ORDER MATTERS above. (Calling base() twice inside one call was tried
  * first: both dragons took the second one's colour, and the wingman did not
  * survive interpolation either.)
  *
@@ -179,42 +180,56 @@ int coop_draw_install(void) {
 #define FLAME_OFF_MATRIX 0xB8  /* g_SpyroFlame running orientation matrix */
 #define FLAME_MATRIX_INTS 5
 
-/* THE TUNNEL: A TRAILING FORMATION (2026-09-13).
+/* THE PORTAL PAIR: DEPTH SORT IS DRAW ORDER (2026-09-13).
  *
- * The level transition (gamestate 1) is staged: the game parks Spyro and
- * orbits the camera around him while the background scrolls, so no single
- * "beside him" survives every camera angle.
+ * The wingman flies along the lead's wing line, as on PS1: a rigid formation
+ * that turns with him. In the level transition (gamestate 1) the game parks
+ * Spyro and orbits the camera around him, so over the flight the wingman is
+ * sometimes nearer the camera and sometimes farther.
  *
- *   - Along his wing line (the PS1 build, and v0.5.2): whenever the orbit looks
- *     at him side-on, the wing line points along the view and the wingman
- *     stacks behind him. The user's screenshots showed exactly that.
- *   - Square to the camera's view (v0.5.3): side by side on screen, but the
- *     pair no longer turns with the dragon, and the user judged it worse.
+ * There is no depth test between the two dragons: a model goes into the
+ * ordering table at a coarse depth, so the later draw wins outright and shows
+ * through the other. The PS1 build hit this and fixed it by drawing the
+ * FARTHER dragon first. This port lost that when the wingman became his own
+ * call for colour and was always drawn first, and the user saw them clip.
  *
- * So the wingman trails: back along the heading, out along the wing line, and
- * lower. Seen side-on the pair is staggered front to back; seen from ahead or
- * behind it is apart side to side; and the drop keeps them from lining up at
- * the angles in between. It is still a rigid formation that turns with him.
- * Only here: the landing and the level exit keep the wing line, which has
- * ground under it and must match where play begins. */
-#define TUNNEL_BACK  700   /* behind, along his heading */
-#define TUNNEL_OUT   800   /* out to the side, along his wing line */
-#define TUNNEL_DROP  400   /* and lower */
-
-static void tunnel_offset(int32_t out[3]) {
-    int32_t yaw = *guest32(OP_GADDR_g_Spyro + SPYRO_OFF_YAW);
-    int     b   = (yaw >> 4) & 0xFF;               /* 0x1000 per turn -> 256 */
-    int16_t* cos8 = (int16_t*)g_api->guest(OP_GADDR_D_8006CC78);  /* SIGNED */
-    int32_t c = cos8[b];
-    int32_t sn = cos8[(b - 64) & 0xFF];            /* sin = cos(yaw - 90) */
-    /* The PS1 build found, by drawing it, that an offset along (cos, -sin)
-       puts the second dragon directly BEHIND the first, nose to tail; the
-       wing line is (sin, cos). Behind plus out to the side: */
-    out[0] = (( c * TUNNEL_BACK) + (sn * TUNNEL_OUT)) >> 12;
-    out[1] = ((-sn * TUNNEL_BACK) + (c * TUNNEL_OUT)) >> 12;
-    out[2] = -TUNNEL_DROP;
+ * Two formations were tried instead and rejected by the user: square to the
+ * camera's view (v0.5.3, stopped turning with him) and a trailing stagger
+ * (v0.5.4, looked like one big and one small dragon). */
+static int64_t dist2_to_camera(const int32_t p[3]) {
+    const int32_t* cam = guest32(OP_GADDR_g_Camera + CAMERA_OFF_POSITION);
+    int64_t dx = (int64_t)p[0] - cam[0];
+    int64_t dy = (int64_t)p[1] - cam[1];
+    int64_t dz = (int64_t)p[2] - cam[2];
+    return dx * dx + dy * dy + dz * dz;
 }
 
+/* One wingman draw at wing_pos in his player's colour, as his own call, with
+   position, flame matrix and filter put back exactly afterwards. */
+static void draw_wingman(CPUState* cpu, int32_t* pos, int32_t* mtx, uint8_t* filter,
+                         const int32_t wing_pos[3]) {
+    int32_t saved_pos[3], saved_mtx[FLAME_MATRIX_INTS];
+    uint8_t saved_filter[4];
+    memcpy(saved_pos, pos, sizeof saved_pos);
+    memcpy(saved_mtx, mtx, sizeof saved_mtx);
+    memcpy(saved_filter, filter, 4);
+
+    memcpy(pos, wing_pos, sizeof saved_pos);
+    const uint8_t* wing = g_settings.color[coop_physical_player(1)];
+    if (wing[3] != 0)
+        memcpy(filter, wing, 4);
+    else
+        filter[3] = 0;                       /* untinted, even if the lead is tinted */
+
+    g_in_extra_draw = 1;
+    g_api->call(cpu, OP_FNADDR_func_80023AC4);
+    g_in_extra_draw = 0;
+    g_stats.flyin_draws++;
+
+    memcpy(filter, saved_filter, 4);
+    memcpy(pos, saved_pos, sizeof saved_pos);
+    memcpy(mtx, saved_mtx, sizeof saved_mtx);
+}
 
 static void on_spyro_model(CPUState* cpu) {
     if (g_in_extra_draw) {
@@ -240,47 +255,38 @@ static void on_spyro_model(CPUState* cpu) {
         return;
     }
 
-    SavedRegs regs;
-    save_regs(cpu, &regs);
-
-    /* ---- the wingman FIRST, as his own call ----
-       He must leave no trace: not his position, not the flame matrix every
-       model draw nudges (retail nudges it once here), and not the filter. */
+    /* The wingman must leave no trace: not his position, not the flame matrix
+       every model draw nudges (retail nudges it once here), and not the filter. */
     int32_t* pos    = guest32(OP_GADDR_g_Spyro + SPYRO_OFF_POSITION);
     int32_t* mtx    = guest32(OP_GADDR_g_SpyroFlame + FLAME_OFF_MATRIX);
     uint8_t* filter = guest8(OP_GADDR_g_Spyro + SPYRO_OFF_COLOR_FILTER);
-    int32_t  saved_pos[3], saved_mtx[FLAME_MATRIX_INTS], right[3];
-    uint8_t  saved_filter[4];
+    int32_t  right[3], wing_pos[3];
 
-    memcpy(saved_pos, pos, sizeof saved_pos);
-    memcpy(saved_mtx, mtx, sizeof saved_mtx);
-    memcpy(saved_filter, filter, 4);
+    coop_formation_offset(right);
+    for (int i = 0; i < 3; i++)
+        wing_pos[i] = pos[i] + right[i];
 
-    if (coop_gamestate() == 1)
-        tunnel_offset(right);
-    else
-        coop_formation_offset(right);
-    pos[0] += right[0];
-    pos[1] += right[1];
-    pos[2] += right[2];
+    /* Farther first, nearer last. Ties keep the wingman first, as before. */
+    int wingman_first = dist2_to_camera(wing_pos) >= dist2_to_camera(pos);
 
-    /* He is the other dragon, drawn with the lead's pose. */
-    const uint8_t* wing = g_settings.color[coop_physical_player(1)];
-    if (wing[3] != 0)
-        memcpy(filter, wing, 4);
-    else
-        filter[3] = 0;                       /* untinted, even if the lead is tinted */
+    SavedRegs regs;
+    save_regs(cpu, &regs);
 
-    g_in_extra_draw = 1;
-    g_api->call(cpu, OP_FNADDR_func_80023AC4);
-    g_in_extra_draw = 0;
-    g_stats.flyin_draws++;
-
-    memcpy(filter, saved_filter, 4);
-    memcpy(pos, saved_pos, sizeof saved_pos);
-    memcpy(mtx, saved_mtx, sizeof saved_mtx);
-
-    /* ---- then the lead, last ---- */
-    load_regs(cpu, &regs);
-    g_api->base(cpu);
+    if (wingman_first) {
+        draw_wingman(cpu, pos, mtx, filter, wing_pos);
+        load_regs(cpu, &regs);
+        g_api->base(cpu);                    /* the lead, nearer */
+    } else {
+        /* The lead first. The wingman's call gets the original arguments, and
+           the lead's results are what the caller sees afterwards. With
+           interpolation on, the in-between frames may show the lead in the
+           wingman's colour while this order holds (the native renderer takes
+           the last draw's colour); interpolation already hides player 2. */
+        g_api->base(cpu);
+        SavedRegs after;
+        save_regs(cpu, &after);
+        load_regs(cpu, &regs);
+        draw_wingman(cpu, pos, mtx, filter, wing_pos);
+        load_regs(cpu, &after);
+    }
 }

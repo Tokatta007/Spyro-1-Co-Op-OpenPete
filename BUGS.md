@@ -157,22 +157,31 @@ can hesitate before attacking again. It does attack eventually, and it is hard
 to reproduce. Likely its pod changing owner as the two distances cross the
 switch margin. Accepted by the user as not worth chasing for now.
 
-### X4. Dragons stacked on the portal transition screen: trailing formation in v0.5.4
+### X4. Dragons clipping on the portal transition screen: draw order, v0.5.5
 
 Screenshots 2026-09-13 on "Entering Stone Hill". The transition is staged: Spyro
-is parked and the camera orbits him, so no single "beside him" survives every
-angle.
+is parked and the camera orbits him, so the wingman is sometimes nearer the
+camera and sometimes farther.
 
 | Version | Wingman placed | Result |
 | --- | --- | --- |
-| PS1, v0.5.2 | along Spyro's wing line | stacks behind him whenever the orbit views him side-on |
-| v0.5.3 | square to the camera's view | side by side on screen, but no longer turns with him; user judged it worse |
-| **v0.5.4** | **behind, out along the wing line, and lower** | awaiting test |
+| PS1, v0.5.2 | along Spyro's wing line, wingman always drawn first | the look the user wants, but clips |
+| v0.5.3 | square to the camera's view | no longer turns with him; worse |
+| v0.5.4 | behind, out along the wing line, and lower | one big dragon and one small; worse |
+| **v0.5.5** | **wing line, farther dragon drawn first** | awaiting test |
 
-The trailing formation still turns with him. Side-on it is staggered front to
-back, from ahead or behind it is apart side to side, and the drop keeps the two
-from lining up in between. Tunnel only; the landing and level exit keep the
-wing line. The three distances are constants at the top of `tunnel_offset`.
+The cause was never the placement. The two models have no depth test between
+them, so the later draw shows through the earlier one. The PS1 build found this
+and drew the farther dragon first (PS1 `CLAUDE.md`, item 0c, "DEPTH SORT IS DRAW
+ORDER"); this port lost it when the wingman became his own call for colour.
+Covers the transition, the landing and the level exit.
+
+Possible side effect: with interpolation on, while the lead is drawn first the
+in-between frames may show him in the wingman's colour.
+
+Not yet checked: the same order problem in gameplay, where player 2 is always
+drawn first. If player 1 ever shows through player 2 when player 2 is nearer
+the camera, the same fix applies to the scene composer.
 
 ### X2. Player 2 copies player 1's controls
 
