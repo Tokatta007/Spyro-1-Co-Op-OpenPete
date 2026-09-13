@@ -73,7 +73,7 @@ out, but accepts it for now.
 v0.8.1: spacing back to the PS1 640 at the user's request, and a respawned
 dragon blinks in for 45 ticks (M7).
 
-### M7. Respawn arrival: blink (v0.8.1) and an effect test bench (v0.9.0)
+### M7. Respawn arrival: blink (v0.8.1) and layered effects (v0.9.1)
 
 A dragon who respawns on his own blinks in for 45 ticks. On top of that the
 user wants an arrival effect, chosen by trying them: "Respawn effect" in the
@@ -84,6 +84,12 @@ renderer headless (`shots/respawn-effects-v090.png`): smoke puff, white
 sparks, orange sparks, dust ring, colour flash in the player's colour, chest
 break, magic pop, and the crystal burst (the rescue crystal's pieces; only in
 levels with dragons, which is every place a respawn happens).
+
+**v0.9.1, the user's choice:** effects are layers that combine, a box each in
+the M panel, defaulting to the crystal burst with orange sparks, white sparks
+and the dust ring. Everything but the dust ring was coming out of the top of
+Spyro's head; an "Effect height" slider now sets where they start, default
+-200 from his position.
 
 The user's crystal-dragon idea as a whole is not possible: the crystal's
 shake is its own moby's animation, and spawning that moby starts the rescue

@@ -196,18 +196,23 @@ typedef struct {
     uint32_t test_key_down;
 } CoopFxArena;
 
+/* Respawn effect layers; any combination plays together. */
 enum {
-    RESPAWN_FX_BLINK_ONLY,
-    RESPAWN_FX_SMOKE,
-    RESPAWN_FX_WHITE_SPARKS,
-    RESPAWN_FX_ORANGE_SPARKS,
-    RESPAWN_FX_DUST_RING,
-    RESPAWN_FX_COLOUR_FLASH,
-    RESPAWN_FX_CHEST_BREAK,
-    RESPAWN_FX_MAGIC_POP,
-    RESPAWN_FX_CRYSTAL,
-    RESPAWN_EFFECT_COUNT
+    FX_CRYSTAL,
+    FX_ORANGE_SPARKS,
+    FX_WHITE_SPARKS,
+    FX_DUST_RING,
+    FX_SMOKE,
+    FX_COLOUR_FLASH,
+    FX_LAYER_COUNT
 };
+/* The user's pick, 2026-09-13: the crystal burst with both sparks and the dust. */
+#define FX_DEFAULT_LAYERS ((1 << FX_CRYSTAL) | (1 << FX_ORANGE_SPARKS) | \
+                           (1 << FX_WHITE_SPARKS) | (1 << FX_DUST_RING))
+#define FX_HEIGHT_DEFAULT (-200)  /* world units from Spyro's position, which sits
+                                     well above his feet; the dust ring ignores it */
+#define FX_HEIGHT_MIN     (-400)
+#define FX_HEIGHT_MAX     200
 
 /* One shadow slot's buffers, wherever they live. */
 typedef struct {
@@ -262,7 +267,8 @@ typedef struct {
     int     respawn_modern;  /* 1 modern, 0 original */
     int     split_vertical;  /* 1 vertical, 0 horizontal; no effect until split-screen exists */
     uint8_t color[COOP_MAX_PLAYERS][4]; /* per player: red, green, blue, strength */
-    int     respawn_effect;  /* RESPAWN_FX_*, chosen on the test bench */
+    int     respawn_effects; /* bit per FX_* layer */
+    int     effect_height;   /* FX_HEIGHT_MIN..MAX */
     int     draw_p2;         /* development */
     int     hysteresis;      /* development: enemy switch margin, percent */
 } CoopSettings;
@@ -327,9 +333,9 @@ int  coop_menu_install(uint32_t menu_vaddr);
 int  coop_menu_drawing_preview(void);  /* the Colors page is drawing a preview dragon */
 
 /* coop_effects.c */
-extern const char* const k_respawn_effect_names[RESPAWN_EFFECT_COUNT];
+extern const char* const k_fx_layer_names[FX_LAYER_COUNT];
 void coop_effects_init(uint32_t fx_vaddr);
-void coop_effect_play(CPUState* cpu, int effect, int person);
+void coop_effect_play(CPUState* cpu, int layers, int person);
 void coop_effects_tick(CPUState* cpu);   /* the test key */
 
 /* coop_gates.c */

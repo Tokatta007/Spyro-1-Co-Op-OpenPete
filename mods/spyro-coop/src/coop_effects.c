@@ -2,10 +2,12 @@
  * @file coop_effects.c
  * @brief Respawn effects, and a test bench to choose one (2026-09-13).
  *
- * THE BENCH. The user wanted to try several arrival effects before settling
- * on one. Every candidate is built here; "Respawn effect" in the M panel picks
- * which one a respawn plays, and the test key (O by default) plays it on the
- * camera's dragon at once, so they can be compared without dying.
+ * THE BENCH. The user wanted to try several arrival effects before settling.
+ * Each is a layer, and any combination plays together: the M panel has a box
+ * per layer and an "Effect height" slider, and the test key (O by default)
+ * plays the current mix on the camera's dragon, so it can be tuned without
+ * dying. The user's choice (2026-09-13) is the default: the crystal burst
+ * with orange and white sparks and the dust ring, lowered toward the body.
  *
  * EVERY EFFECT IS THE GAME'S OWN, found in the decompilation:
  *   - particles, through the level's particle spawner, whose address the
@@ -43,16 +45,13 @@ static uint32_t g_fx_vaddr;
 
 static CoopFxArena* FX(void) { return (CoopFxArena*)g_api->guest(g_fx_vaddr); }
 
-const char* const k_respawn_effect_names[RESPAWN_EFFECT_COUNT] = {
-    "Blink only",
-    "Smoke puff",
-    "White sparks",
+const char* const k_fx_layer_names[FX_LAYER_COUNT] = {
+    "Crystal burst (in levels with dragons)",
     "Orange sparks",
+    "White sparks",
     "Dust ring",
-    "Colour flash",
-    "Chest break (smoke + orange sparks)",
-    "Magic pop (flash + sparks + dust)",
-    "Crystal burst (experimental)",
+    "Smoke puff",
+    "Colour flash (player's colour)",
 };
 
 /* ------------------------------------------------------------------------
@@ -81,9 +80,16 @@ static uint32_t here(int32_t lift) {
     return scratch(offsetof(CoopFxArena, scratch));
 }
 
-static void smoke(CPUState* cpu)         { particle(cpu, 5, 2, here(0x40), 0); }
-static void white_sparks(CPUState* cpu)  { particle(cpu, 14, 71, here(0x40), 0); }
-static void orange_sparks(CPUState* cpu) { particle(cpu, 16, 70, here(0x40), 0x20); }
+/* HEIGHT. Spyro's position sits well above his feet (a respawn stands him 356
+   units over the floor), and effects started there, or above it, looked as if
+   they came out of the top of his head (the user, 2026-09-13). Every effect
+   but the dust ring, which is built on the ground, starts at the "Effect
+   height" setting relative to that position. */
+static int32_t lift(void) { return g_settings.effect_height; }
+
+static void smoke(CPUState* cpu)         { particle(cpu, 5, 2, here(lift()), 0); }
+static void white_sparks(CPUState* cpu)  { particle(cpu, 14, 71, here(lift()), 0); }
+static void orange_sparks(CPUState* cpu) { particle(cpu, 16, 70, here(lift()), 0x20); }
 
 /* The heavy landing's ring, with eight puffs instead of four. Velocities
    (cos, sin, 0) >> 7 around the circle, as func_80041670 builds them. */
@@ -110,7 +116,7 @@ static void colour_flash(CPUState* cpu, int person) {
     uint8_t* m = F->scratch + 16;
     memset(m, 0, 0x58);
     const int32_t* pos = guest32(OP_GADDR_g_Spyro + SPYRO_OFF_POSITION);
-    int32_t v[3] = { pos[0], pos[1], pos[2] + 0x40 };
+    int32_t v[3] = { pos[0], pos[1], pos[2] + lift() };
     memcpy(m + 0x0C, v, sizeof v);
     int16_t cls = 0x22;
     memcpy(m + 0x36, &cls, 2);
@@ -137,7 +143,7 @@ static int crystal_burst(CPUState* cpu) {
     uint8_t* m = F->scratch + 16;
     memset(m, 0, 0x58);
     const int32_t* pos = guest32(OP_GADDR_g_Spyro + SPYRO_OFF_POSITION);
-    int32_t v[3] = { pos[0], pos[1], pos[2] + 0x80 };
+    int32_t v[3] = { pos[0], pos[1], pos[2] + lift() };
     memcpy(m + 0x0C, v, sizeof v);
     int16_t one = 0x1000;
     memcpy(m + 0x20, &one, 2);               /* m[0][0] */
@@ -163,26 +169,19 @@ static int crystal_burst(CPUState* cpu) {
  * The effects
  * ---------------------------------------------------------------------- */
 
-void coop_effect_play(CPUState* cpu, int effect, int person) {
-    if (coop_gamestate() != GS_PLAYING)
+void coop_effect_play(CPUState* cpu, int layers, int person) {
+    if (coop_gamestate() != GS_PLAYING || layers == 0)
         return;
     SavedRegs r;
     save_regs(cpu, &r);
-    switch (effect) {
-    case RESPAWN_FX_SMOKE:         smoke(cpu); break;
-    case RESPAWN_FX_WHITE_SPARKS:  white_sparks(cpu); break;
-    case RESPAWN_FX_ORANGE_SPARKS: orange_sparks(cpu); break;
-    case RESPAWN_FX_DUST_RING:     dust_ring(cpu); break;
-    case RESPAWN_FX_COLOUR_FLASH:  colour_flash(cpu, person); break;
-    case RESPAWN_FX_CHEST_BREAK:   smoke(cpu); orange_sparks(cpu); break;
-    case RESPAWN_FX_MAGIC_POP:     colour_flash(cpu, person); white_sparks(cpu); dust_ring(cpu); break;
-    case RESPAWN_FX_CRYSTAL:
-        if (crystal_burst(cpu) == 0)
-            white_sparks(cpu);               /* no crystal here: still arrive with something */
-        smoke(cpu);
-        break;
-    default: break;                          /* blink only */
-    }
+    /* The crystal first, so its pieces are under the rest. Where the level has
+       no crystal pieces, that layer simply adds nothing. */
+    if (layers & (1 << FX_CRYSTAL))       crystal_burst(cpu);
+    if (layers & (1 << FX_ORANGE_SPARKS)) orange_sparks(cpu);
+    if (layers & (1 << FX_WHITE_SPARKS))  white_sparks(cpu);
+    if (layers & (1 << FX_DUST_RING))     dust_ring(cpu);
+    if (layers & (1 << FX_SMOKE))         smoke(cpu);
+    if (layers & (1 << FX_COLOUR_FLASH))  colour_flash(cpu, person);
     load_regs(cpu, &r);
     g_stats.effects_played++;
 }
@@ -197,9 +196,10 @@ void coop_effects_tick(CPUState* cpu) {
     F->test_key_down = down;
     if (!pressed)
         return;
-    coop_effect_play(cpu, g_settings.respawn_effect, coop_physical_player(0));
+    coop_effect_play(cpu, g_settings.respawn_effects, coop_physical_player(0));
     *guest32(OP_GADDR_g_Spyro + SPYRO_OFF_RESPAWN_BLINK) = COOP_RESPAWN_BLINK_TICKS;   /* with the blink, as a respawn */
-    coop_log(OP_MOD_LOG_INFO, "test respawn effect: %s", k_respawn_effect_names[g_settings.respawn_effect]);
+    coop_log(OP_MOD_LOG_INFO, "test respawn effects: layers 0x%02X, height %d",
+             g_settings.respawn_effects, g_settings.effect_height);
 }
 
 void coop_effects_init(uint32_t fx_vaddr) {
