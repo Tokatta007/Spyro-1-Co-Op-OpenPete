@@ -85,8 +85,8 @@ void coop_publish_status(void) {
                      g_stats.handovers, g_stats.teleports);
     coop_status("View swaps %u (press the swap_view key, P by default)",
                      g_stats.view_swaps);
-    coop_status("P2 drawn %u times, flame %u times%s",
-                     g_stats.p2_draws, g_stats.p2_flame_draws,
+    coop_status("P2 drawn %u times, flame %u times, portal wingman %u times%s",
+                     g_stats.p2_draws, g_stats.p2_flame_draws, g_stats.flyin_draws,
                      g_draw_enabled ? "" : " (drawing OFF in settings)");
     coop_status("Moby passes: two-player %u, single %u; update functions hooked %u",
                      g_stats.moby_two_pass, g_stats.moby_single_pass, g_stats.moby_fns_hooked);
@@ -107,7 +107,7 @@ void coop_publish_status(void) {
         coop_log(OP_MOD_LOG_INFO,
                    "tick %u: ready=%u P1(%d,%d,%d) P2(%d,%d,%d) apart=%u | "
                    "p2ticks=%u p2cams=%u seeds=%u reseeds=%u deaths=%u handovers=%u "
-                   "teleports=%u swaps=%u draws=%u flames=%u | mobys 2p=%u 1p=%u fns=%u sparx=%u pushes=%u | other tick=%u ra=0x%08X other cam=%u ra=0x%08X | "
+                   "teleports=%u swaps=%u draws=%u flames=%u flyin=%u | mobys 2p=%u 1p=%u fns=%u sparx=%u pushes=%u | other tick=%u ra=0x%08X other cam=%u ra=0x%08X | "
                    "guards probe=%u query=%u | padvsync=%u inswap=%u",
                    g_stats.camera_gameplay, A->ready,
                    p1[0], p1[1], p1[2], p2[0], p2[1], p2[2],
@@ -115,7 +115,7 @@ void coop_publish_status(void) {
                    g_stats.p2_ticks, g_stats.p2_cameras, g_stats.seeds,
                    g_stats.level_reseeds, g_stats.deaths, g_stats.handovers,
                    g_stats.teleports, g_stats.view_swaps,
-                   g_stats.p2_draws, g_stats.p2_flame_draws,
+                   g_stats.p2_draws, g_stats.p2_flame_draws, g_stats.flyin_draws,
                    g_stats.moby_two_pass, g_stats.moby_single_pass,
                    g_stats.moby_fns_hooked, g_stats.sparx_spawns, g_stats.pushes,
                    g_stats.tick_other, g_stats.tick_other_ra,

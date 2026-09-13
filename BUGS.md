@@ -93,14 +93,19 @@ which is candidate 2 for the ram.
 
 ## 2. Missing, planned
 
-### M1. Player 2 in the portal fly-in and exit
+### M1. Player 2 in the portal fly-in and exit: BUILT, awaiting test
 
-On PS1 the portal and level-entrance sequence drew the second dragon beside the
-first (`Sp1x2DrawPortalSpyro`, hooked over the one `RasterizePairedActor` call
-in the sequence draw at `0x8001A0D8`). Not ported: the inventory filed it under
-rendering (phase D), before single-screen drawing was known to work. It can
-move up now. Uses the same formation offset as seeding, so the dragons do not
-jump sides when the sequence ends.
+Built 2026-09-12 in `coop_draw.c` (`on_spyro_model`). Ported from
+`Sp1x2DrawPortalSpyro`, and extended: PS1 covered the level transition and the
+entrance landing (gamestates 1 and 9, one call at `0x8001A0D8`), and missed
+the level exit (gamestate 10, `0x8001C964`), which is now included. Draws a
+second copy of player 1's dragon along his wing line using the same offset as
+seeding, restoring his position and flame matrix afterwards.
+
+**Also an experiment:** unlike the gameplay draw, this calls `base()` twice
+inside the model renderer's own override. Check whether the wingman stays
+visible with interpolation **on**. If he does, the gameplay draw can be moved
+to the same shape and X1 may go away.
 
 ### M2. Individual death and respawn
 

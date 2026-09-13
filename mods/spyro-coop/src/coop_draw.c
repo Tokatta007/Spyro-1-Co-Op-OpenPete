@@ -67,10 +67,76 @@ static void on_glows_and_sparkles(CPUState* cpu) {
     g_api->base(cpu);
 }
 
+static void on_spyro_model(CPUState* cpu);
+
 int coop_draw_install(void) {
-    if (g_api->override_name(g_self, "func_80058BA8", on_glows_and_sparkles) != 0) {
+    if (g_api->override_name(g_self, "func_80058BA8", on_glows_and_sparkles) != 0 ||
+        g_api->override_name(g_self, "func_80023AC4", on_spyro_model) != 0) {
         coop_log(OP_MOD_LOG_ERROR, "could not install the player 2 draw");
         return 1;
     }
     return 0;
+}
+
+/* ------------------------------------------------------------------------
+ * The portal fly-in and fly-out. Ported from Sp1x2DrawPortalSpyro, and
+ * extended to the level exit, which the PS1 build never covered.
+ *
+ * THE FLIGHT IS STAGED. During these sequences the dragon does not really
+ * travel: the game parks him and orbits the camera around him while the
+ * background scrolls. So there is no stable "beside him" in world space. PS1
+ * tried a world axis (the gap collapsed into depth when the camera looked
+ * down it), a camera matrix row (came out vertical), and a direction square
+ * to the view (right on screen, but the wingman slid round as the camera
+ * orbited). What works is anchoring to the DRAGON: offset along his own wing
+ * line, so the pair is a rigid formation the camera views from moving angles.
+ *
+ * WHAT IS DRAWN is player 1's dragon a second time, pose and all, moved
+ * sideways. Player 2's own state is not used: in these sequences he has no
+ * meaningful pose of his own, and the two dragons look identical anyway.
+ *
+ * Unlike the gameplay draw, this one calls base() twice INSIDE the model
+ * renderer's own override. If the engine brackets its render paths per call
+ * of this function, the wingman may survive interpolation where the gameplay
+ * draw does not, which would be worth knowing.
+ *
+ * Covered call sites, read from the retail executable:
+ *   0x8001A0D8 in func_8001A050: level transition (1) and entrance (9)
+ *   0x8001C964 in func_8001C694: exit level (10)
+ * ---------------------------------------------------------------------- */
+
+#define FLAME_OFF_MATRIX 0xB8  /* g_SpyroFlame running orientation matrix */
+#define FLAME_MATRIX_INTS 5
+
+static void on_spyro_model(CPUState* cpu) {
+    if ((cpu->ra != RA_FLYIN_MODEL && cpu->ra != RA_FLYOUT_MODEL) ||
+        !coop_enabled() || !coop_draw_enabled()) {
+        g_api->base(cpu);
+        return;
+    }
+
+    SavedRegs regs;
+    save_regs(cpu, &regs);
+
+    g_api->base(cpu);                                  /* player 1, stock */
+
+    /* The wingman must leave no trace: not his position, and not the flame
+       matrix, which every model draw nudges. Retail nudges it once here. */
+    int32_t* pos = guest32(OP_GADDR_g_Spyro + SPYRO_OFF_POSITION);
+    int32_t* mtx = guest32(OP_GADDR_g_SpyroFlame + FLAME_OFF_MATRIX);
+    int32_t  saved_pos[3], saved_mtx[FLAME_MATRIX_INTS], right[3];
+
+    memcpy(saved_pos, pos, sizeof saved_pos);
+    memcpy(saved_mtx, mtx, sizeof saved_mtx);
+    coop_formation_offset(right);
+    pos[0] += right[0];
+    pos[1] += right[1];
+    pos[2] += right[2];
+
+    load_regs(cpu, &regs);
+    g_api->base(cpu);                                  /* the wingman */
+    g_stats.flyin_draws++;
+
+    memcpy(pos, saved_pos, sizeof saved_pos);
+    memcpy(mtx, saved_mtx, sizeof saved_mtx);
 }

@@ -31,6 +31,9 @@ extern openpete_mod_t*           g_self;
 #define RA_GAMEPLAY_SPYRO_TICK 0x80033AE0u  /* jal func_8004A200 at 0x80033AD8 */
 #define RA_GAMEPLAY_CAMERA     0x80033B54u  /* jal CameraUpdate  at 0x80033B4C */
 #define RA_GAMEPLAY_MOBY_UPDATE 0x80033AACu /* jalr g_UpdateMoby at 0x80033AA4 */
+/* Spyro's model renderer, func_80023AC4, called from the sequence draws: */
+#define RA_FLYIN_MODEL         0x8001A0E0u  /* func_8001A050: gamestates 1 and 9 */
+#define RA_FLYOUT_MODEL        0x8001C96Cu  /* func_8001C694: gamestate 10 */
 
 /* ------------------------------------------------------------------------
  * Spyro struct offsets. The SDK carries no typed Spyro struct, so these come
@@ -105,7 +108,7 @@ typedef struct {
     unsigned p2_ticks, p2_cameras;
     unsigned seeds, level_reseeds, deaths, handovers, teleports;
     unsigned view_swaps;
-    unsigned p2_draws, p2_flame_draws;
+    unsigned p2_draws, p2_flame_draws, flyin_draws;
     unsigned moby_two_pass, moby_single_pass, moby_fns_hooked;
     unsigned sparx_spawns, pushes;
     unsigned probe_refusals, query_refusals;
@@ -126,6 +129,7 @@ int  coop_players_install(void);
 void coop_players_disable(void);
 void coop_p2_position(int32_t out[3]);
 void coop_swap_spyro(void);
+void coop_formation_offset(int32_t out[3]);
 void coop_swap_camera(void);
 void coop_handover_resume(void);
 int32_t coop_gamestate(void);
@@ -135,7 +139,7 @@ int32_t coop_level_id(void);
 void coop_mobys_track(void);
 
 /* coop_draw.c */
-int  coop_draw_install(void);
+int  coop_draw_install(void);  /* gameplay draw and portal fly-in */
 
 /* coop_gates.c */
 int  coop_gates_install(void);

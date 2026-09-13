@@ -174,11 +174,11 @@ static void arm_script_focus(void) {
  * Seeding
  * ---------------------------------------------------------------------- */
 
-/* Out along the live dragon's wing line. On PS1 this function was shared
-   with the portal fly-in draw so the two could not place him on opposite
-   sides; it will be again once there is a draw. Heading is (cos, -sin),
-   established by observation, so the wing line is (sin, cos). */
-static void formation_offset(int32_t out[3]) {
+/* Out along the live dragon's wing line. SHARED with the portal fly-in draw
+   (coop_draw.c), exactly as on PS1, so the dragons fly in with the spacing
+   they are seeded at and do not jump sides when the sequence ends. Heading is
+   (cos, -sin), established by observation, so the wing line is (sin, cos). */
+void coop_formation_offset(int32_t out[3]) {
     int32_t yaw = *guest32(OP_GADDR_g_Spyro + SPYRO_OFF_YAW);
     int     b   = (yaw >> 4) & 0xFF;               /* 0x1000 per turn -> 256 */
     int16_t* cos8 = (int16_t*)g_api->guest(OP_GADDR_D_8006CC78);  /* SIGNED */
@@ -210,7 +210,7 @@ static void seed_player2(CoopArena* A) {
        right bytes in the packed shadow. */
     int32_t off[3];
     swap_spyro(A);
-    formation_offset(off);
+    coop_formation_offset(off);
     live_position()[0] += off[0];
     live_position()[1] += off[1];
     swap_spyro(A);
