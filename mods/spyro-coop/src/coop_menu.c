@@ -18,10 +18,12 @@
  *   - the box's border lines, func_8001844C, are called with constant corners,
  *     and its fill quad is linked by func_800168DC. Their arguments are
  *     rewritten at those call sites, which grows the small box by a row, or
- *     widens it to the big box while one of our pages is open;
+ *     resizes it for one of our pages;
+ *   - the big title, func_80017FE4 ("PAUSED"), reads MULTIPLAYER on that page
+ *     and is left out on the Colors page, whose swatches take its row;
  *   - the text builder, func_800181AC, is called for each pause-list row. At
- *     the last row we draw MULTIPLAYER and move the last row down; while a page
- *     is open the stock rows are skipped and the page is drawn there instead.
+ *     the last row we draw MULTIPLAYER and the last row one line lower; while a
+ *     page is open the stock rows are skipped and the page is drawn there.
  *
  * The pause substate stays 0 throughout, so the game's own options and quit
  * screens are untouched.
@@ -44,10 +46,12 @@
 #define RA_ITEM_EXIT_LEVEL 0x8001B57Cu   /* "EXIT LEVEL", levels */
 #define RA_ITEM_QUIT_GAME  0x8001B5C8u   /* "QUIT GAME", homeworlds */
 #define RA_BOX_FILL_LINK   0x8001A868u   /* func_800168DC(fill quad), the box's grey fill */
+#define RA_BOX_SEPARATOR   0x8001A888u   /* the short line under the title, (224,97)-(288,97) */
 #define RA_BOX_TOP         0x8001A904u   /* small box, (140,67)-(372,67) */
 #define RA_BOX_RIGHT       0x8001A92Cu   /* (372,67)-(372,bottom) */
 #define RA_BOX_BOTTOM      0x8001A940u   /* (372,bottom)-(140,bottom) */
 #define RA_BOX_LEFT        0x8001A954u   /* (x,bottom)-(x,67), shared with the big box */
+#define RA_TITLE           0x8001A988u   /* func_80017FE4("PAUSED", {186,82,3072}, 28, 11) */
 
 /* ---- pad bits, g_Pad.m_Down ---- */
 #define PAD_L2       (1 << 0)
@@ -64,13 +68,10 @@
 /* ---- layout ---- */
 #define ROW_MP          4      /* the pause cursor value of our row; the stock rows are 0..3 */
 #define LIST_MP_Y       164    /* our row takes the last row's place... */
-#define LIST_LAST_Y     182
+#define LIST_LAST_Y     182    /* ...and the last row moves down one */
 #define SMALL_BOTTOM    194    /* stock 176, plus one row of 18 */
-#define BIG_LEFT        84     /* the options screen's big box */
-#define BIG_RIGHT       428
-#define BIG_BOTTOM      198
 #define SHADE_NORMAL    11     /* every stock menu */
-#define SHADE_DISABLED  12     /* grey, verified on PS1 */
+#define SHADE_DISABLED  12     /* grey, verified on PS1 (pale purple in the native view) */
 #define LETTER_STRIDE   88     /* sizeof(Moby) */
 #define LETTER_ROT_Z    70     /* Moby.m_Rotation.z, one byte */
 #define SND_MOVE        45     /* sound table: menuCursor */
@@ -78,9 +79,18 @@
 #define SPU_SOUND_TABLE 0x2CC  /* g_Spu.m_SoundTable, a guest pointer */
 
 enum { PAGE_NONE = 0, PAGE_MULTIPLAYER = 1, PAGE_COLORS = 2 };
-enum { MP_PLAYERS, MP_RESPAWN, MP_COLORS, MP_SPLIT, MP_DONE, MP_ROWS };
-#define COLOR_DONE 8           /* 0..3 player 1, 4..7 player 2, then DONE */
-#define COLOR_ROWS 9
+
+/* Settings first, then the page that leads elsewhere, then the way out. */
+enum { MP_PLAYERS, MP_RESPAWN, MP_SPLIT, MP_COLORS, MP_DONE, MP_ROWS };
+
+/* Colors: cursor = player * 4 + channel for the cells, then DONE. */
+#define COLOR_CELLS COOP_MAX_PLAYERS * 4
+#define COLOR_DONE  COLOR_CELLS
+
+typedef struct { int left, right, bottom; } Box;
+
+static const Box k_box_multiplayer = { 84, 428, 188 };  /* the options screen's width */
+static const Box k_box_colors      = { 36, 476, 196 };  /* wide enough for four columns */
 
 static uint32_t g_menu_vaddr;
 static int      g_in_menu_call;    /* inside a call we made: stock behaviour */
@@ -177,6 +187,14 @@ static int32_t* pause_cursor(void)   { return guest32(OP_GADDR_D_80075720); }
 static int32_t  pause_substate(void) { return *guest32(OP_GADDR_D_800757C8); }
 static int      in_pause_list(void)  { return coop_gamestate() == 2 && pause_substate() == 0; }
 
+static const Box* page_box(void) {
+    switch (M()->page) {
+    case PAGE_MULTIPLAYER: return &k_box_multiplayer;
+    case PAGE_COLORS:      return &k_box_colors;
+    default:               return NULL;
+    }
+}
+
 /* ------------------------------------------------------------------------
  * Input: the pause update
  * ---------------------------------------------------------------------- */
@@ -187,7 +205,13 @@ static void back_to_list(CPUState* cpu) {
     chime(cpu, SND_MOVE);
 }
 
-static void multiplayer_adjust(CPUState* cpu, int delta) {
+static void back_to_multiplayer(CPUState* cpu) {
+    M()->page = PAGE_MULTIPLAYER;
+    M()->cursor = MP_COLORS;
+    chime(cpu, SND_MOVE);
+}
+
+static void multiplayer_adjust(CPUState* cpu) {
     CoopMenuArena* m = M();
     switch (m->cursor) {
     case MP_PLAYERS:
@@ -196,20 +220,34 @@ static void multiplayer_adjust(CPUState* cpu, int delta) {
     case MP_RESPAWN:
         g_settings.respawn_modern = !g_settings.respawn_modern;
         break;
+    case MP_SPLIT:
+        g_settings.split_vertical = !g_settings.split_vertical;
+        break;
     case MP_COLORS:
         m->page = PAGE_COLORS;
         m->cursor = 0;
         chime(cpu, SND_PICK);
         return;
-    case MP_SPLIT:
-        g_settings.split_vertical = !g_settings.split_vertical;
-        break;
     default:
         return;
     }
-    (void)delta;
     coop_settings_changed();
     chime(cpu, SND_PICK);
+}
+
+/* A column belongs to a player who is in the game. The others are drawn grey
+   and the cursor steps over them. */
+static int color_cell_active(int cell) {
+    return cell >= COLOR_DONE || cell / 4 < g_settings.players;
+}
+
+static int color_step(int cell, int dir) {
+    for (int i = 0; i <= COLOR_DONE; i++) {
+        cell = (cell + dir + COLOR_DONE + 1) % (COLOR_DONE + 1);
+        if (color_cell_active(cell))
+            return cell;
+    }
+    return COLOR_DONE;
 }
 
 static void colors_adjust(CPUState* cpu, int delta) {
@@ -225,18 +263,15 @@ static void colors_adjust(CPUState* cpu, int delta) {
 static void page_input(CPUState* cpu, int32_t down) {
     CoopMenuArena* m = M();
     int colors = (m->page == PAGE_COLORS);
-    int rows = colors ? COLOR_ROWS : MP_ROWS;
 
-    if (down & PAD_DOWN) {
-        m->cursor = (m->cursor + 1) % rows;
-        chime(cpu, SND_MOVE);
-    } else if (down & PAD_UP) {
-        m->cursor = (m->cursor + rows - 1) % rows;
+    if (down & (PAD_DOWN | PAD_UP)) {
+        int dir = (down & PAD_DOWN) ? 1 : -1;
+        m->cursor = colors ? color_step(m->cursor, dir)
+                           : (m->cursor + dir + MP_ROWS) % MP_ROWS;
         chime(cpu, SND_MOVE);
     } else if (down & (PAD_LEFT | PAD_RIGHT)) {
-        int d = (down & PAD_RIGHT) ? 1 : -1;
-        if (colors) colors_adjust(cpu, d);
-        else        multiplayer_adjust(cpu, d);
+        if (colors) colors_adjust(cpu, (down & PAD_RIGHT) ? 1 : -1);
+        else        multiplayer_adjust(cpu);
     } else if (colors && (down & (PAD_L2 | PAD_R2))) {
         colors_adjust(cpu, (down & PAD_R2) ? 16 : -16);   /* coarse */
     } else if (colors && (down & PAD_SQUARE)) {
@@ -245,16 +280,15 @@ static void page_input(CPUState* cpu, int32_t down) {
             chime(cpu, SND_PICK);
         }
     } else if (down & PAD_TRIANGLE) {
-        if (colors) { m->page = PAGE_MULTIPLAYER; m->cursor = MP_COLORS; chime(cpu, SND_MOVE); }
+        if (colors) back_to_multiplayer(cpu);
         else        back_to_list(cpu);
     } else if (down & PAD_CROSS) {
-        if (m->cursor == rows - 1) {         /* DONE: one level back, never two */
-            if (colors) { m->page = PAGE_MULTIPLAYER; m->cursor = MP_COLORS; chime(cpu, SND_MOVE); }
-            else        back_to_list(cpu);
-        } else if (colors) {
-            colors_adjust(cpu, 1);
+        if (colors) {
+            if (m->cursor == COLOR_DONE) back_to_multiplayer(cpu);   /* one level, never two */
+            else                         colors_adjust(cpu, 1);
         } else {
-            multiplayer_adjust(cpu, 1);
+            if (m->cursor == MP_DONE) back_to_list(cpu);
+            else                      multiplayer_adjust(cpu);
         }
     }
 }
@@ -309,38 +343,6 @@ static void on_pause_update(CPUState* cpu) {
  * Drawing: the pages
  * ---------------------------------------------------------------------- */
 
-static const uint8_t k_swatch_base[3] = { 0x78, 0x58, 0xA8 };   /* his skin, roughly */
-
-/* A flat quad showing what the tint does to him: Spyro's colour blended
-   toward the chosen one by the strength, the way the filter blends. The PS1
-   build's answer to the preview dragons that never drew. */
-static void swatch(CPUState* cpu, int player, int cx) {
-    const uint8_t* c = g_settings.color[player];
-    uint32_t f4 = *(uint32_t*)g_api->guest(OP_GADDR_D_800757B0);   /* primitive cursor */
-    uint8_t* p = guest8(f4);
-    int x0 = cx - 22, x1 = cx + 22, y0 = 38, y1 = 60;
-
-    memset(p, 0, 24);
-    uint32_t tag = 0x05000000u;
-    memcpy(p, &tag, 4);
-    for (int i = 0; i < 3; i++)
-        p[4 + i] = (uint8_t)(k_swatch_base[i] + ((c[i] - k_swatch_base[i]) * c[3]) / 255);
-    p[7] = 0x28;                             /* POLY_F4, opaque */
-    int16_t xy[8] = { (int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y0,
-                      (int16_t)x0, (int16_t)y1, (int16_t)x1, (int16_t)y1 };
-    memcpy(p + 8, xy, sizeof xy);
-
-    cpu->a0 = f4;
-    game_call(cpu, OP_FNADDR_func_800168DC);            /* link it */
-    *(uint32_t*)g_api->guest(OP_GADDR_D_800757B0) = f4 + 24;
-
-    /* Framed with the box's own line routine, for the same shimmering gold. */
-    box_line(cpu, x0, y0, x1, y0);
-    box_line(cpu, x1, y0, x1, y1);
-    box_line(cpu, x1, y1, x0, y1);
-    box_line(cpu, x0, y1, x0, y0);
-}
-
 static void hint(CPUState* cpu, const char* s) {
     /* Narrower spacing so a long line fits under the box, as on PS1. */
     text(cpu, s, 256 - (int)strlen(s) * 12 / 2, 206, 0x1100, 12, 13, SHADE_NORMAL);
@@ -348,17 +350,17 @@ static void hint(CPUState* cpu, const char* s) {
 
 static void draw_multiplayer(CPUState* cpu) {
     CoopMenuArena* m = M();
-    static const int y[MP_ROWS] = { 120, 134, 148, 162, 176 };
+    static const int y[MP_ROWS] = { 114, 128, 142, 156, 170 };
+    static const char* const labels[MP_ROWS] = { "PLAYERS", "RESPAWN", "SPLIT", "COLORS", "DONE" };
     const char* values[MP_ROWS] = {
         g_settings.players == 2 ? "2" : "1",
         g_settings.respawn_modern ? "MODERN" : "ORIGINAL",
-        NULL,
         g_settings.split_vertical ? "VERTICAL" : "HORIZONTAL",
         NULL,
+        NULL,
     };
-    static const char* const labels[MP_ROWS] = { "PLAYERS", "RESPAWN", "COLORS", "SPLIT", "DONE" };
 
-    text_centred(cpu, "MULTIPLAYER", 256, 104, SHADE_NORMAL);
+    /* The page's title is the big one, drawn in place of PAUSED. */
     Built sel_label = { 0, 0 }, sel_value = { 0, 0 };
     for (int r = 0; r < MP_ROWS; r++) {
         int shade = (r == MP_SPLIT) ? SHADE_DISABLED : SHADE_NORMAL;
@@ -371,49 +373,90 @@ static void draw_multiplayer(CPUState* cpu) {
     if (m->cursor == MP_SPLIT)
         hint(cpu, "SPLIT SCREEN IS NOT AVAILABLE YET");
     else if (m->cursor == MP_RESPAWN)
-        hint(cpu, g_settings.respawn_modern ? "ONLY THE DRAGON WHO FELL RESPAWNS"
-                                            : "EVERY DEATH RESTARTS BOTH DRAGONS");
+        hint(cpu, g_settings.respawn_modern ? "DEATH CAUSES INDIVIDUAL RESPAWN"
+                                            : "DEATH RESTARTS BOTH DRAGONS");
     wobble(sel_label, 0);
     wobble(sel_value, sel_label.count);
 }
 
-#define COL1_X 282
-#define COL2_X 372
+/* Colors page columns, one per player, and the rows. */
+static const int k_col_x[COOP_MAX_PLAYERS] = { 216, 280, 344, 408 };
+#define COLOR_LABEL_X  48
+#define SWATCH_TOP     72     /* in the title row, where PAUSED would be */
+#define SWATCH_BOTTOM  92
+#define SWATCH_HALF_W  22
 
-static Built number(CPUState* cpu, int v, int cx, int y) {
+static const uint8_t k_swatch_base[3] = { 0x78, 0x58, 0xA8 };   /* his skin, roughly */
+
+/* A flat quad showing what the tint does to him: Spyro's colour blended
+   toward the chosen one by the strength, the way the filter blends. The PS1
+   build's answer to the preview dragons that never drew. A player who is not
+   in the game gets a darkened swatch, like his greyed column. */
+static void swatch(CPUState* cpu, int player, int cx) {
+    const uint8_t* c = g_settings.color[player];
+    uint32_t f4 = *(uint32_t*)g_api->guest(OP_GADDR_D_800757B0);   /* primitive cursor */
+    uint8_t* p = guest8(f4);
+    int x0 = cx - SWATCH_HALF_W, x1 = cx + SWATCH_HALF_W;
+    int active = player < g_settings.players;
+
+    memset(p, 0, 24);
+    uint32_t tag = 0x05000000u;
+    memcpy(p, &tag, 4);
+    for (int i = 0; i < 3; i++) {
+        int v = k_swatch_base[i] + ((c[i] - k_swatch_base[i]) * c[3]) / 255;
+        p[4 + i] = (uint8_t)(active ? v : v / 3);
+    }
+    p[7] = 0x28;                             /* POLY_F4, opaque */
+    int16_t xy[8] = { (int16_t)x0, SWATCH_TOP,    (int16_t)x1, SWATCH_TOP,
+                      (int16_t)x0, SWATCH_BOTTOM, (int16_t)x1, SWATCH_BOTTOM };
+    memcpy(p + 8, xy, sizeof xy);
+
+    cpu->a0 = f4;
+    game_call(cpu, OP_FNADDR_func_800168DC);            /* link it */
+    *(uint32_t*)g_api->guest(OP_GADDR_D_800757B0) = f4 + 24;
+
+    /* Framed with the box's own line routine, for the same shimmering gold. */
+    box_line(cpu, x0, SWATCH_TOP, x1, SWATCH_TOP);
+    box_line(cpu, x1, SWATCH_TOP, x1, SWATCH_BOTTOM);
+    box_line(cpu, x1, SWATCH_BOTTOM, x0, SWATCH_BOTTOM);
+    box_line(cpu, x0, SWATCH_BOTTOM, x0, SWATCH_TOP);
+}
+
+static Built number(CPUState* cpu, int v, int cx, int y, int shade) {
     char s[4];
     int i = 0;
     if (v >= 100) s[i++] = (char)('0' + v / 100);
     if (v >= 10)  s[i++] = (char)('0' + (v / 10) % 10);
     s[i++] = (char)('0' + v % 10);
     s[i] = 0;
-    return text_centred(cpu, s, cx, y, SHADE_NORMAL);
+    return text_centred(cpu, s, cx, y, shade);
 }
 
 static void draw_colors(CPUState* cpu) {
     CoopMenuArena* m = M();
     static const char* const labels[4] = { "RED", "GREEN", "BLUE", "STRENGTH" };
-    static const int y[4] = { 134, 147, 160, 173 };
-
-    text_centred(cpu, "COLORS", 256, 104, SHADE_NORMAL);
-    text_centred(cpu, "P1", COL1_X, 120, SHADE_NORMAL);
-    text_centred(cpu, "P2", COL2_X, 120, SHADE_NORMAL);
+    static const char* const heads[COOP_MAX_PLAYERS] = { "P1", "P2", "P3", "P4" };
+    static const int y[4] = { 122, 136, 150, 164 };
 
     Built sel = { 0, 0 };
-    for (int k = 0; k < 4; k++) {
-        text(cpu, labels[k], 114, y[k], 0x1400, 15, 16, SHADE_NORMAL);
-        Built a = number(cpu, g_settings.color[0][k], COL1_X, y[k]);
-        Built b = number(cpu, g_settings.color[1][k], COL2_X, y[k]);
-        if (m->cursor == k)     sel = a;
-        if (m->cursor == k + 4) sel = b;
+    for (int p = 0; p < COOP_MAX_PLAYERS; p++) {
+        int shade = (p < g_settings.players) ? SHADE_NORMAL : SHADE_DISABLED;
+        text_centred(cpu, heads[p], k_col_x[p], 108, shade);
+        for (int k = 0; k < 4; k++) {
+            Built b = number(cpu, g_settings.color[p][k], k_col_x[p], y[k], shade);
+            if (m->cursor == p * 4 + k)
+                sel = b;
+        }
     }
-    Built done = text(cpu, "DONE", 114, 186, 0x1400, 15, 16, SHADE_NORMAL);
+    for (int k = 0; k < 4; k++)
+        text(cpu, labels[k], COLOR_LABEL_X, y[k], 0x1400, 15, 16, SHADE_NORMAL);
+    Built done = text(cpu, "DONE", COLOR_LABEL_X, 178, 0x1400, 15, 16, SHADE_NORMAL);
     if (m->cursor == COLOR_DONE)
         sel = done;
 
     hint(cpu, "L2 R2 FAST  SQUARE RESET");
-    swatch(cpu, 0, COL1_X);
-    swatch(cpu, 1, COL2_X);
+    for (int p = 0; p < COOP_MAX_PLAYERS; p++)
+        swatch(cpu, p, k_col_x[p]);
     wobble(sel, 0);
 }
 
@@ -435,11 +478,11 @@ static void on_text_sprites(CPUState* cpu) {
         return;
     }
     CoopMenuArena* m = M();
-    m->scratch_used = 0;
 
     if (m->page != PAGE_NONE) {
         /* Our page owns the box: the stock rows are not built at all. */
         if (is_last_item(cpu->ra)) {
+            m->scratch_used = 0;
             if (m->page == PAGE_COLORS) draw_colors(cpu);
             else                        draw_multiplayer(cpu);
             cpu->s5 = 0;                     /* no stock shimmer on our letters */
@@ -452,14 +495,11 @@ static void on_text_sprites(CPUState* cpu) {
     }
 
     /* The last pause row: MULTIPLAYER first, in its place, then the row itself
-       one line lower. Ours first, so g_HudMobys is the stock row's again when
-       the stock code reads it for its own shimmer.
-
-       THE ROW IS REBUILT, NOT MOVED. Its position vector is the pause draw's
-       one stack Vector3D, shared by every row, and writing the new y into it
-       put ALL FOUR rows on that line (seen in both renderers, 2026-09-13): the
-       letters take their position from it after this call, not during it. So
-       the row gets its own copy of the vector, with only y changed. */
+       one line lower, built from a copy of its position vector so the pause
+       draw's own stack vector is left as the game wrote it. Ours first, so
+       g_HudMobys is the stock row's again when the stock code reads it for
+       its own shimmer. */
+    m->scratch_used = 0;
     SavedRegs r;
     save_regs(cpu, &r);
     uint32_t arg5 = cpu->read_word(cpu->sp + 16);
@@ -485,33 +525,70 @@ static void on_text_sprites(CPUState* cpu) {
     }
 }
 
+/* func_80017FE4, the big letters: PAUSED becomes the page's own title. */
+#define TITLE_X 117           /* MULTIPLAYER centred on the box: measured on screen, the
+                                 big letters run wider than PAUSED's x 186 suggests */
+
+static void on_title(CPUState* cpu) {
+    const Box* box = (cpu->ra == RA_TITLE && !g_in_menu_call && in_pause_list())
+                     ? page_box() : NULL;
+    if (box == NULL) {
+        g_api->base(cpu);
+        return;
+    }
+    if (M()->page == PAGE_COLORS)
+        return;                              /* the swatches take this row */
+
+    CoopMenuArena* m = M();
+    m->scratch_used = 0;
+    static const char title[] = "MULTIPLAYER";
+    int32_t pos[3];
+    memcpy(pos, guest32(cpu->a1), sizeof pos);
+    pos[0] = TITLE_X;
+    cpu->a0 = scratch_put(title, sizeof title);
+    cpu->a1 = scratch_put(pos, sizeof pos);
+    g_api->base(cpu);
+}
+
 static void on_box_line(CPUState* cpu) {
     uint32_t ra = cpu->ra;
     if (g_in_menu_call || !in_pause_list() ||
-        (ra != RA_BOX_TOP && ra != RA_BOX_RIGHT &&
+        (ra != RA_BOX_SEPARATOR && ra != RA_BOX_TOP && ra != RA_BOX_RIGHT &&
          ra != RA_BOX_BOTTOM && ra != RA_BOX_LEFT)) {
         g_api->base(cpu);
         return;
     }
-    int big = (M()->page != PAGE_NONE);
-    int bottom = big ? BIG_BOTTOM : SMALL_BOTTOM;
+    const Box* box = page_box();
+    int left   = box ? box->left : 140;
+    int right  = box ? box->right : 372;
+    int bottom = box ? box->bottom : SMALL_BOTTOM;
 
     switch (ra) {
+    case RA_BOX_SEPARATOR:
+        if (box) {                           /* under the whole title, or the swatches */
+            cpu->a0 = (uint32_t)(M()->page == PAGE_COLORS ? left + 12 : 128);
+            cpu->a2 = (uint32_t)(M()->page == PAGE_COLORS ? right - 12 : 384);
+        }
+        break;
     case RA_BOX_TOP:
-        if (big) { cpu->a0 = BIG_LEFT; cpu->a2 = BIG_RIGHT; }
+        cpu->a0 = (uint32_t)left;
+        cpu->a2 = (uint32_t)right;
         break;
     case RA_BOX_RIGHT:
-        if (big) { cpu->a0 = BIG_RIGHT; cpu->a2 = BIG_RIGHT; }
+        cpu->a0 = (uint32_t)right;
+        cpu->a2 = (uint32_t)right;
         cpu->a3 = (uint32_t)bottom;
         break;
     case RA_BOX_BOTTOM:
-        if (big) { cpu->a0 = BIG_RIGHT; cpu->a2 = BIG_LEFT; }
+        cpu->a0 = (uint32_t)right;
         cpu->a1 = (uint32_t)bottom;
+        cpu->a2 = (uint32_t)left;
         cpu->a3 = (uint32_t)bottom;
         break;
     case RA_BOX_LEFT:
-        if (big) { cpu->a0 = BIG_LEFT; cpu->a2 = BIG_LEFT; }
+        cpu->a0 = (uint32_t)left;
         cpu->a1 = (uint32_t)bottom;
+        cpu->a2 = (uint32_t)left;
         break;
     }
     g_api->base(cpu);
@@ -526,14 +603,14 @@ static void on_link_prim(CPUState* cpu) {
         g_api->base(cpu);
         return;
     }
-    int big = (M()->page != PAGE_NONE);
+    const Box* box = page_box();
     int16_t* xy = (int16_t*)g_api->guest(cpu->a0 + 8);   /* POLY_F4 x/y pairs */
-    if (big) {
-        xy[0] = BIG_LEFT;  xy[2] = BIG_RIGHT;
-        xy[4] = BIG_LEFT;  xy[6] = BIG_RIGHT;
+    if (box) {
+        xy[0] = (int16_t)box->left;  xy[2] = (int16_t)box->right;
+        xy[4] = (int16_t)box->left;  xy[6] = (int16_t)box->right;
     }
-    xy[5] = (int16_t)(big ? BIG_BOTTOM : SMALL_BOTTOM);  /* y2 */
-    xy[7] = xy[5];                                         /* y3 */
+    xy[5] = (int16_t)(box ? box->bottom : SMALL_BOTTOM);  /* y2 */
+    xy[7] = xy[5];                                          /* y3 */
     g_api->base(cpu);
 }
 
@@ -541,6 +618,7 @@ int coop_menu_install(uint32_t menu_vaddr) {
     g_menu_vaddr = menu_vaddr;
     if (g_api->override_name(g_self, "func_8002E12C", on_pause_update) != 0 ||
         g_api->override_name(g_self, "func_800181AC", on_text_sprites) != 0 ||
+        g_api->override_name(g_self, "func_80017FE4", on_title) != 0 ||
         g_api->override_name(g_self, "func_8001844C", on_box_line) != 0 ||
         g_api->override_name(g_self, "func_800168DC", on_link_prim) != 0) {
         coop_log(OP_MOD_LOG_ERROR, "could not install the Multiplayer menu");

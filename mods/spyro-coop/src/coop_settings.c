@@ -43,8 +43,8 @@ static void set_defaults(CoopSettings* s) {
     s->players        = 2;
     s->respawn_modern = 1;
     s->split_vertical = 1;
-    memcpy(s->color[0], k_default_color, 4);
-    memcpy(s->color[1], k_default_color, 4);
+    for (int i = 0; i < COOP_MAX_PLAYERS; i++)
+        memcpy(s->color[i], k_default_color, 4);
     s->draw_p2        = 1;
     s->hysteresis     = 25;
 }
@@ -81,7 +81,7 @@ void coop_settings_save(void) {
     fprintf(f, "players = %d\n", s->players);
     fprintf(f, "respawn = %s\n", s->respawn_modern ? "modern" : "original");
     fprintf(f, "split = %s\n", s->split_vertical ? "vertical" : "horizontal");
-    for (int i = 0; i < 2; i++)
+    for (int i = 0; i < COOP_MAX_PLAYERS; i++)
         fprintf(f, "p%d_color = %d %d %d %d\n", i + 1,
                 s->color[i][0], s->color[i][1], s->color[i][2], s->color[i][3]);
     fprintf(f, "draw_p2 = %d\n", s->draw_p2);
@@ -106,7 +106,8 @@ void coop_settings_load(void) {
                 s->respawn_modern = strncmp(val, "original", 8) != 0;
             else if (!strcmp(key, "split"))
                 s->split_vertical = strncmp(val, "horizontal", 10) != 0;
-            else if (!strcmp(key, "p1_color") || !strcmp(key, "p2_color")) {
+            else if (key[0] == 'p' && key[1] >= '1' && key[1] < '1' + COOP_MAX_PLAYERS &&
+                     !strcmp(key + 2, "_color")) {
                 int i = key[1] - '1', c[4];
                 if (sscanf(val, "%d %d %d %d", &c[0], &c[1], &c[2], &c[3]) == 4)
                     for (int k = 0; k < 4; k++)
@@ -146,7 +147,9 @@ void coop_settings_changed(void) {
 
 /* SQUARE on the in-game Colors page. */
 void coop_settings_reset_color(int player) {
-    memcpy(g_settings.color[player & 1], k_default_color, 4);
+    if (player < 0 || player >= COOP_MAX_PLAYERS)
+        return;
+    memcpy(g_settings.color[player], k_default_color, 4);
     coop_settings_changed();
 }
 
@@ -196,8 +199,8 @@ static void settings_panel(const openpete_mod_ui_t* ui) {
 
     ui->separator();
     ui->text("Colours (strength 0 leaves Spyro's own colour)");
-    color_rows(ui, 0, &changed);
-    color_rows(ui, 1, &changed);
+    for (int p = 0; p < COOP_MAX_PLAYERS; p++)
+        color_rows(ui, p, &changed);
 
     ui->separator();
     ui->text_disabled("Development");

@@ -187,11 +187,13 @@ extern CoopStats g_stats;
 /* ------------------------------------------------------------------------
  * Settings (coop_settings.c). Host state, tick context only.
  * ---------------------------------------------------------------------- */
+#define COOP_MAX_PLAYERS 4   /* colours are kept for four; play supports two so far */
+
 typedef struct {
     int     players;         /* 1 or 2 */
     int     respawn_modern;  /* 1 modern, 0 original */
     int     split_vertical;  /* 1 vertical, 0 horizontal; no effect until split-screen exists */
-    uint8_t color[2][4];     /* per player: red, green, blue, strength */
+    uint8_t color[COOP_MAX_PLAYERS][4]; /* per player: red, green, blue, strength */
     int     draw_p2;         /* development */
     int     hysteresis;      /* development: enemy switch margin, percent */
 } CoopSettings;

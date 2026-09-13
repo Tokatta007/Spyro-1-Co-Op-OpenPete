@@ -66,19 +66,26 @@ with controllers, so every player-facing setting must be reachable in game.
 
 1. **Built:** settings core, the M panel, and per-player colour applied to both
    dragons (including the portal wingman) through the game's own tint.
-2. **Built (v0.6.0):** MULTIPLAYER row in the pause list, above QUIT / EXIT
-   LEVEL, and the Multiplayer page: PLAYERS, RESPAWN, COLORS, SPLIT (grey, with
-   a "not available yet" hint), DONE. TRIANGLE or DONE goes back one level.
-3. **Built (v0.6.0):** the Colors page, as on PS1: RED, GREEN, BLUE, STRENGTH
-   for P1 and P2, LEFT/RIGHT by one, L2/R2 by 16, SQUARE resets the column,
-   and a swatch per player showing the blended result.
-4. Spinning Spyro previews. Not started.
+2. **Confirmed by the user (v0.6.0), revised in v0.6.1:** MULTIPLAYER row in
+   the pause list, above QUIT / EXIT LEVEL, and the Multiplayer page: PLAYERS,
+   RESPAWN, SPLIT (grey, with a "not available yet" hint), then COLORS and
+   DONE, settings above and ways out below at the user's request. The big
+   title reads MULTIPLAYER in place of PAUSED. Hints under the box for
+   RESPAWN ("death causes individual respawn" / "death restarts both
+   dragons") and SPLIT. TRIANGLE or DONE goes back one level.
+3. **Built (v0.6.0), widened in v0.6.1:** the Colors page: RED, GREEN, BLUE,
+   STRENGTH for P1 to P4, LEFT/RIGHT by one, L2/R2 by 16, SQUARE resets the
+   column. The title row holds a swatch per player showing the blended
+   result. Columns for players beyond the PLAYERS setting are grey, dimmed and
+   skipped by the cursor. Settings now keep four colours.
+4. Spinning Spyro previews, in the Colors title row. Not started; on PS1 the
+   dragons never drew because the paused world is a stored picture.
 
 Checked headless 2026-09-13 with screenshots (`--skip-to-level artisans` and a
 scripted movie): the list with five rows and a grown box, the shimmer on
 MULTIPLAYER, both pages, a value change, backing out, and moving past
-MULTIPLAYER in both directions. Not yet seen: the EXIT LEVEL and flight-level
-QUIT variants of the list. Two looks differ between the renderers: the grey
+MULTIPLAYER in both directions. The EXIT LEVEL variant confirmed by the user;
+the flight-level QUIT variant not yet seen. Two looks differ between the renderers: the grey
 "disabled" shade shows pale purple in the native renderer, and the swatch
 borders draw only in PsyCross.
 
@@ -172,7 +179,7 @@ switch margin. Accepted by the user as not worth chasing for now.
 ### X4. Dragons overlap on the portal transition screen: PARKED, ENGINE SIDE, for the author
 
 Screenshots 2026-09-13 on "Entering Stone Hill", then reproduced headless from a
-savestate at the portal (see "Headless screenshots" in `CLAUDE.md`).
+savestate at the portal (the recipe is in the private notes; see `CLAUDE.md`).
 
 The camera starts facing the pair, then swings to a side view and stays there.
 Logged in that pose: camera to lead (+2695, +58, +818), lead to wingman
