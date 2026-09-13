@@ -25,6 +25,13 @@ removes the memory problem outright.
 
 The goal is **four-player split-screen**.
 
+## Saves
+
+When a mod is enabled and a memory card holds progress from unmodded play,
+OpenPete warns at startup that saving will mix modded progress into that card.
+Saving while playing co-op does exactly that. To keep an existing save
+untouched, save your co-op game to the other memory card slot.
+
 ## Layout
 
 ```

@@ -121,7 +121,8 @@ typedef struct {
        ints were a ruled-out camera experiment's vector; reused rather than
        resized so savestates made since v0.3.0 stay valid. */
     int32_t p2_health_carry[2];
-    int32_t unused;
+    int32_t slots_swapped;    /* 1 after an odd number of view-key swaps: slot 0
+                                 (the live dragon) is physically player 2 */
     int32_t owner_level;      /* level the moby owner table belongs to */
 } CoopExtraArena;
 
@@ -198,6 +199,7 @@ int  coop_players_install(void);
 void coop_players_disable(void);
 void coop_p2_position(int32_t out[3]);
 void coop_swap_spyro(void);
+int  coop_physical_player(int slot);  /* which player's dragon is in slot 0 or 1 */
 void coop_formation_offset(int32_t out[3]);
 void coop_swap_camera(void);
 void coop_handover_resume(void);

@@ -153,6 +153,19 @@ static int32_t* live_position(void) {
     return guest32(OP_GADDR_g_Spyro + SPYRO_OFF_POSITION);
 }
 
+/* WHICH DRAGON IS IN WHICH SLOT. Slot 0 is the live dragon between overrides,
+   slot 1 the shadow. Two things put player 2's dragon in slot 0: the view key,
+   which trades them until pressed again, and a handover, where his tick or
+   moby pass started a sequence and his state stays live until it ends.
+   Anything keyed to a person rather than a slot, such as colour, asks here.
+   (Seen 2026-09-13: with player 1 green and player 2 red, the camera's dragon
+   was always green, and player 2 talked to the balloonist as a green dragon.) */
+int coop_physical_player(int slot) {
+    CoopArena* A = coop_arena();
+    int crossed = (coop_extra_arena()->slots_swapped ? 1 : 0) ^ (A->handover ? 1 : 0);
+    return (slot ^ crossed) & 1;
+}
+
 void coop_p2_position(int32_t out[3]) {
     memcpy(out, coop_arena()->spyro + SPYRO_OFF_POSITION, 12);
 }
@@ -399,6 +412,7 @@ static void maybe_swap_view(CoopArena* A) {
     A->swapped = 0;            /* identities traded, not mid-override */
     resample_teleport(A);      /* anything that moves a live dragon does this */
     coop_mobys_identities_swapped();
+    coop_extra_arena()->slots_swapped ^= 1;
     g_stats.view_swaps++;
 }
 

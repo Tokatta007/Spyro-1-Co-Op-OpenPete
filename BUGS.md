@@ -70,6 +70,26 @@ with controllers, so every player-facing setting must be reachable in game.
 3. Color page.
 4. Spinning Spyro previews.
 
+### C1. Colour follows the slot, not the dragon: FIXED in v0.5.1, awaiting test
+
+Seen 2026-09-13 with player 1 green and player 2 red: after the view key the
+camera's dragon was still green, and player 2 talked to the balloonist and
+freed a dragon as a green dragon. Colour was chosen by slot, and both the view
+key and a handover put player 2's dragon in slot 0. `coop_physical_player`
+now answers which person is in each slot, from the view-key state and the
+handover flag. Known gap: if player 2 dies in a way that runs the stock death
+sequence, the death animation still shows player 1's colour.
+
+### C2. The portal wingman shows player 1's colour: diagnosing
+
+Seen 2026-09-13 through a portal and on leaving a level, though his colour is
+written before his draw. The retail renderer reads the filter on every call
+(`r_pete`, `lw a0, g_Spyro + 0x28`, loaded into the GTE far colour), but the
+engine also rebuilds Spyro natively from game state (its `spyro-walk` and
+`spyro-dump colorFilter@0x28` diagnostics). v0.5.1 logs the far colour after
+each of the two draws for the first three portal flights, which says whether
+the retail renderer used the wingman's colour and the engine then dropped it.
+
 ### M3. Sounds from player 2's side: BUILT in v0.4.2, awaiting test
 
 `coop_sound.c`, from `Sp1x2SoundListenerDistance`: a 3D sound's distance is
@@ -94,14 +114,14 @@ interpolation is on, just like the gameplay draw. Calling `base()` twice inside
 the renderer's own override does not get the second dragon into the engine's
 per-path bookkeeping either. X1 stands.
 
-### M2. Individual death and respawn: WORKS, one case untested
+### M2. Individual death and respawn: WORKS
 
 Confirmed by the user 2026-09-13 (v0.4.0): each dragon respawns on his own at
 the right place, before and after a checkpoint; after leaving a level he
 returns to the homeworld's true start rather than the portal, which the user
 prefers; the save fairy stays quiet until he walks away; a double death costs
-two lives. **Not yet tried: a death on the last life**, which should be a
-normal game over.
+two lives. A death on the last life is a normal game over (confirmed the same
+day).
 
 **Now a choice, "Respawn style", at the user's request:** *modern* (the above)
 or *original* (every death reloads both, as retail).
@@ -128,20 +148,13 @@ can hesitate before attacking again. It does attack eventually, and it is hard
 to reproduce. Likely its pod changing owner as the two distances cross the
 switch margin. Accepted by the user as not worth chasing for now.
 
-### X4. The two dragons overlap on the portal loading screen when entering a level
+### X4. Dragons overlapping on the portal loading screen: gap widened, awaiting test
 
-Seen 2026-09-13: in the level transition tunnel, when entering a level (and
-perhaps only the first time), one dragon's wings pass through the other's.
-Not seen when returning home. Noted as a callout.
-
-**Two candidates, not yet measured.** The wingman is placed 640 units along
-the wing line computed from Spyro's physics yaw (`g_Spyro + 0x11C`). Either the
-flying pose's wingspan is wider than 640, or that yaw does not match the
-orientation the dragon is drawn with during this sequence, which would put the
-wingman partly in front or behind instead of beside. The body rotation byte
-(`g_Spyro + 0x0E`) is what the model is drawn with, and would settle the
-second. A wider gap only in gamestate 1 would fix the first without changing
-the spacing when play begins.
+Seen 2026-09-13 in the tunnel when entering a level. The wingman sat 640 units
+out, the same world units and the same spacing the PS1 build used
+(`SP1X2_P2_START_OFFSET` 0x280), so the PS1 build likely overlapped too, less
+visibly. v0.5.1 widens the gap to 1,024 in gamestate 1 only. That screen cuts to
+the level before play, so the landing and play still start 640 apart.
 
 ### X2. Player 2 copies player 1's controls
 
