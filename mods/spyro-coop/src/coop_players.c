@@ -18,7 +18,7 @@
  * PHASE A LIMITS, deliberate:
  *   - player 2 borrows player 1's input (no second controller yet, B1)
  *   - drawing him is in coop_draw.c; enemies and Sparx are in coop_mobys.c
- *   - no individual respawn yet (phase B, last)
+ *   - individual death and respawn are in coop_respawn.c
  */
 
 #include "coop.h"
@@ -193,6 +193,25 @@ static void resample_teleport(CoopArena* A) {
     memcpy(A->tp_sample, live_position(), sizeof A->tp_sample);
 }
 
+/* Which tick is running, for the death override. Set and cleared around each
+   base() call inside one override invocation, so it never outlives a tick and
+   needs no place in the arena. */
+static int g_in_gameplay_tick;
+static int g_ticking_player;
+int coop_in_gameplay_tick(void) { return g_in_gameplay_tick; }
+int coop_ticking_player(void)   { return g_ticking_player; }
+
+/* THE TELEPORT DETECTOR TRACKS PLAYER 1, the live dragon between overrides.
+   A respawn moves the dying dragon, so the sample must move with player 1's
+   respawn. It must NOT be moved to player 2's: the next frame would compare
+   player 1 against player 2's respawn point, read a jump, and reseed the pair
+   as a level restart. The PS1 build wrote it for either player, a latent bug
+   whenever the respawn point was more than 0x4000 from player 1. */
+void coop_resample_teleport(void) {
+    if (g_ticking_player == 0)
+        resample_teleport(coop_arena());
+}
+
 /* Copy player 1 into player 2, then step him out to the side. */
 static void seed_player2(CoopArena* A) {
     walk(k_spyro_regions, COUNT(k_spyro_regions), A->spyro, 0);
@@ -200,6 +219,12 @@ static void seed_player2(CoopArena* A) {
     for (unsigned i = 0; i < CAMERA_EXTRA_COUNT; i++)
         A->camera_extra[i] = *guest32(k_camera_extra[i]);  /* or he starts with garbage */
     walk(k_pad_regions, COUNT(k_pad_regions), A->pad, 0);
+
+    /* A new level: remember where it was entered, as a fallback respawn point
+       for deaths before any checkpoint (coop_respawn.c). A reseed in the same
+       level, after a shared death, keeps the capture from its entry. */
+    if (A->last_level != level_id())
+        coop_capture_spawn();
 
     A->last_level = level_id();
     A->handover   = 0;
@@ -384,7 +409,10 @@ static void on_spyro_tick(CPUState* cpu) {
     save_regs(cpu, &regs);
 
     arm_script_focus();
+    g_in_gameplay_tick = 1;
+    g_ticking_player   = 0;
     g_api->base(cpu);                                  /* player 1 */
+    g_in_gameplay_tick = 0;
 
     int32_t gs = gamestate();
     if (gs == 4 || gs == 5) {
@@ -422,7 +450,11 @@ static void on_spyro_tick(CPUState* cpu) {
         *substeps = A->substeps_owed;                  /* same budget as P1 */
         arm_script_focus();
         load_regs(cpu, &regs);
+        g_in_gameplay_tick = 1;
+        g_ticking_player   = 1;
         g_api->base(cpu);                              /* player 2 */
+        g_in_gameplay_tick = 0;
+        g_ticking_player   = 0;
         g_stats.p2_ticks++;
 
         *substeps = after_p1;                          /* consumed once */

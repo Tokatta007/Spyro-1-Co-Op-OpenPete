@@ -6,7 +6,7 @@
 # renderers; the swap_view key trades identities either way. It also carries
 # the collision guards, the controller 2 probe, and a measurement of when the
 # game polls input. Phase B part 1 adds nearest-player mobys, player 2's own
-# Sparx, and the dragons pushing apart.
+# Sparx, the dragons pushing apart, and separate death and respawn.
 #
 # uses: `api->override_name` - Spyro's tick, CameraUpdate, two collision routines, PadVSync
 # uses: `api->override_addr` - the current level's moby update, attached when first seen
@@ -22,7 +22,7 @@
 [mod]
 id      = "spyro-coop"
 name    = "Spyro Co-Op"
-version = "0.3.0"
+version = "0.4.0"
 game    = "spyro-1"
 api     = 1
 
@@ -67,3 +67,11 @@ max     = 50
 label   = "Enemy switch margin (%)"
 group   = "Co-op"
 help    = "How much closer the other dragon must be before an enemy switches to him. 25 is the PS1 value; lower switches sooner (BUGS.md A3)."
+
+[[config]]
+key     = "coop.respawn"
+type    = "bool"
+default = true
+label   = "Separate respawn"
+group   = "Co-op"
+help    = "When one dragon dies and the other is alive, only he respawns and one shared life is spent. Off makes any death reload both, as retail."

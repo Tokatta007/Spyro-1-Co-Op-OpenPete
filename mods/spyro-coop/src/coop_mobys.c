@@ -285,8 +285,11 @@ static void p2_sparx_keep(CPUState* cpu, CoopMobyArena* M) {
         if (!fly || M->p2_sparx == sparx1 || (int8_t)fly->m_State < 0)
             M->p2_sparx = 0;                 /* his fly died, or was reused */
     }
-    /* g_Sparx == 0 means this level has no Sparx at all; follow suit. */
-    if (M->p2_sparx == 0 && sparx1 != 0) {
+    /* g_Sparx == 0 means this level has no Sparx at all; follow suit. And a
+       dragon with no health has no Sparx in retail: respawning one would only
+       lose it again, and burn the spawn cap doing so. */
+    if (M->p2_sparx == 0 && sparx1 != 0 &&
+        *guest32(OP_GADDR_g_Spyro + 0x164) > 0) {
         if (M->sparx_spawns_level >= SPARX_SPAWN_CAP_PER_LEVEL) {
             if (M->sparx_spawns_level == SPARX_SPAWN_CAP_PER_LEVEL) {
                 M->sparx_spawns_level++;     /* log once */
@@ -370,8 +373,11 @@ static void on_moby_update(CPUState* cpu) {
     save_regs(cpu, &regs);
 
     /* ---- player 1's pass ---- */
+    coop_sparx_heal(cpu);                        /* after his own respawn */
+    load_regs(cpu, &regs);
     unsigned n = assign_mobys(M, A, mobys, mobys_vaddr);
     mask_walk(M, mobys, n, 1, 0);
+    coop_fairy_mute(0);
     g_api->base(cpu);
     mask_walk(M, mobys, n, 1, 1);
 
@@ -388,6 +394,7 @@ static void on_moby_update(CPUState* cpu) {
     A->swapped = 1;
 
     load_regs(cpu, &regs);
+    coop_fairy_mute(1);
     p2_sparx_keep(cpu, M);
 
     {

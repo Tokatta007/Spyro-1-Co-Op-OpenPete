@@ -50,10 +50,35 @@ interpolation is on, just like the gameplay draw. Calling `base()` twice inside
 the renderer's own override does not get the second dragon into the engine's
 per-path bookkeeping either. X1 stands.
 
-### M2. Individual death and respawn
+### M2. Individual death and respawn: BUILT, awaiting test
 
-Phase B item 5. Currently any death reloads the checkpoint for both dragons, as
-retail does.
+Built 2026-09-13 (v0.4.0) in `coop_respawn.c`, ported from `Sp1x2Die`,
+`Sp1x2Ground`, `Sp1x2CaptureSpawn`, `Sp1x2SparxHeal` and `Sp1x2FairyMute`.
+Setting **"Separate respawn"**, on by default.
+
+When one dragon dies while the other is alive and a life remains, the game's
+death trigger is not called. One shared life is spent, the lives counter opens
+and shows the new total, and he is placed at the checkpoint (or the level's
+true start, or where the level was entered), stood on the floor with the
+game's own probe, and reset with `ResetSpyroState(1)` plus 90 frames of
+invulnerability. A double death, or a death with no lives left, runs the stock
+sequence, and a double death charges both lives.
+
+**Changed from PS1, deliberately:**
+
+- **The teleport detector is resampled only for player 1's respawn.** PS1 wrote
+  it for either player. It tracks player 1, so writing player 2's respawn
+  point into it would read as a level restart on the next frame whenever the
+  two were more than `0x4000` apart, and snap the pair together.
+- **Player 1's Sparx is healed only after one of our respawns**, not whenever
+  `g_Sparx` is null, which is also true while a dragon at zero health waits for
+  a butterfly to bring Sparx back. Player 2's Sparx is respawned only once he
+  has health.
+
+**To test:** let each dragon die on his own, in a level and on a homeworld,
+before and after touching a checkpoint; die near a rescued dragon's pedestal
+(the save fairy should stay quiet until you walk away); die together; die on
+the last life.
 
 ---
 

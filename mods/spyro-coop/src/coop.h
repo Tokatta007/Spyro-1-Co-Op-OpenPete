@@ -120,6 +120,16 @@ typedef struct {
 } CoopExtraArena;
 
 /* ------------------------------------------------------------------------
+ * A fourth allocation, appended for the ledger reason above: respawn state.
+ * ---------------------------------------------------------------------- */
+typedef struct {
+    int32_t arrival[4];     /* x, y, z, rotation where this level was entered */
+    int32_t start[5];       /* level id, then x, y, z, rotation of its true start */
+    int32_t fairy_mute[3];  /* respawned player + 1 (0 = off), then x, y */
+    int32_t sparx_heal_pending; /* player 1 respawned on his own and needs a Sparx */
+} CoopRespawnArena;
+
+/* ------------------------------------------------------------------------
  * Host counters. Display only: they reset after a savestate load, which is
  * acceptable for numbers nobody plays against.
  * ---------------------------------------------------------------------- */
@@ -134,6 +144,7 @@ typedef struct {
     unsigned moby_two_pass, moby_single_pass, moby_fns_hooked;
     unsigned sparx_spawns, pushes;
     unsigned owner_flips;
+    unsigned individual_respawns, double_deaths, sparx_heals;
     unsigned pod_members;         /* mobys in a pod, last assignment */
     unsigned pod_merges;          /* pods joined because a list crossed them */
     unsigned cam_on_shared[2];    /* frames each camera focused on D_80077798 */
@@ -150,6 +161,8 @@ extern CoopStats g_stats;
 CoopArena* coop_arena(void);
 CoopMobyArena* coop_moby_arena(void);
 CoopExtraArena* coop_extra_arena(void);
+CoopRespawnArena* coop_respawn_arena(void);
+int        coop_respawn_enabled(void);
 int        coop_hysteresis_percent(void);
 int        coop_enabled(void);
 int        coop_draw_enabled(void);
@@ -163,12 +176,21 @@ void coop_swap_spyro(void);
 void coop_formation_offset(int32_t out[3]);
 void coop_swap_camera(void);
 void coop_handover_resume(void);
+void coop_resample_teleport(void);
+int  coop_in_gameplay_tick(void);   /* inside Spyro's gameplay tick right now */
+int  coop_ticking_player(void);     /* 0 or 1, valid while the above is true */
 int32_t coop_gamestate(void);
 int32_t coop_level_id(void);
 
 /* coop_mobys.c */
 void coop_mobys_track(void);
 void coop_mobys_identities_swapped(void);
+
+/* coop_respawn.c */
+int  coop_respawn_install(void);
+void coop_capture_spawn(void);
+void coop_fairy_mute(int player);
+void coop_sparx_heal(CPUState* cpu);
 
 /* coop_draw.c */
 int  coop_draw_install(void);  /* gameplay draw and portal fly-in */

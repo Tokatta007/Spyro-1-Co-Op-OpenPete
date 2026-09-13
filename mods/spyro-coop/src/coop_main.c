@@ -14,6 +14,8 @@ CoopStats                 g_stats;
 static uint32_t g_arena_vaddr;  /* a guest address, valid across reloads */
 static uint32_t g_moby_vaddr;   /* the moby partition block, likewise */
 static uint32_t g_extra_vaddr;  /* the third block, likewise */
+static uint32_t g_respawn_vaddr;  /* the fourth block, likewise */
+static int      g_respawn_enabled; /* from config */
 static int      g_hysteresis;       /* percent closer to switch owner, from config */
 static int      g_enabled;      /* from config; re-read on every reload */
 static int      g_draw_enabled; /* from config; the visibility experiment */
@@ -41,6 +43,11 @@ void coop_log(int level, const char* fmt, ...) {
     va_end(ap);
     g_api->log(g_self, level, "%s", buf);
 }
+
+CoopRespawnArena* coop_respawn_arena(void) {
+    return (CoopRespawnArena*)g_api->guest(g_respawn_vaddr);
+}
+int coop_respawn_enabled(void) { return g_respawn_enabled; }
 
 CoopExtraArena* coop_extra_arena(void) {
     return (CoopExtraArena*)g_api->guest(g_extra_vaddr);
@@ -100,6 +107,9 @@ void coop_publish_status(void) {
     coop_status("P2 Sparx spawns %u, body pushes %u, moby owner flips %u (switch at %d%% closer)",
                      g_stats.sparx_spawns, g_stats.pushes, g_stats.owner_flips, g_hysteresis);
     coop_status("Mobys in pods (owned as a group): %u, pod merges %u", g_stats.pod_members, g_stats.pod_merges);
+    coop_status("Separate respawn: %s; respawns %u, double deaths %u, Sparx heals %u",
+                g_respawn_enabled ? "on" : "OFF", g_stats.individual_respawns,
+                g_stats.double_deaths, g_stats.sparx_heals);
     for (int i = 0; i < 2; i++)
         coop_status("  P%d camera: on shared vector %u frames, runaway %u frames in %u events, max %u away",
                     i + 1, g_stats.cam_on_shared[i], g_stats.cam_runaway[i],
@@ -119,7 +129,7 @@ void coop_publish_status(void) {
         coop_log(OP_MOD_LOG_INFO,
                    "tick %u: ready=%u P1(%d,%d,%d) P2(%d,%d,%d) apart=%u | "
                    "p2ticks=%u p2cams=%u seeds=%u reseeds=%u deaths=%u handovers=%u "
-                   "teleports=%u swaps=%u draws=%u flames=%u flyin=%u | mobys 2p=%u 1p=%u fns=%u sparx=%u pushes=%u flips=%u pods=%u | cam shared=%u/%u runaway=%u/%u events=%u/%u max=%u/%u | other tick=%u ra=0x%08X other cam=%u ra=0x%08X | "
+                   "teleports=%u swaps=%u draws=%u flames=%u flyin=%u | mobys 2p=%u 1p=%u fns=%u sparx=%u pushes=%u flips=%u pods=%u | respawn on=%d solo=%u double=%u heals=%u | cam shared=%u/%u runaway=%u/%u events=%u/%u max=%u/%u | other tick=%u ra=0x%08X other cam=%u ra=0x%08X | "
                    "guards probe=%u query=%u | padvsync=%u inswap=%u",
                    g_stats.camera_gameplay, A->ready,
                    p1[0], p1[1], p1[2], p2[0], p2[1], p2[2],
@@ -131,6 +141,8 @@ void coop_publish_status(void) {
                    g_stats.moby_two_pass, g_stats.moby_single_pass,
                    g_stats.moby_fns_hooked, g_stats.sparx_spawns, g_stats.pushes,
                    g_stats.owner_flips, g_stats.pod_members,
+                   g_respawn_enabled, g_stats.individual_respawns,
+                   g_stats.double_deaths, g_stats.sparx_heals,
                    g_stats.cam_on_shared[0], g_stats.cam_on_shared[1],
                    g_stats.cam_runaway[0], g_stats.cam_runaway[1],
                    g_stats.cam_runaway_events[0], g_stats.cam_runaway_events[1],
@@ -159,6 +171,7 @@ int openpete_mod_entry(const openpete_mod_api_t* api, openpete_mod_t* self) {
     g_enabled      = api->config_bool(self, "coop.enabled", 1);
     g_draw_enabled = api->config_bool(self, "coop.draw", 1);
     g_hysteresis = (int)api->config_int(self, "coop.hysteresis", 25);
+    g_respawn_enabled = api->config_bool(self, "coop.respawn", 1);
     if (g_hysteresis < 0)  g_hysteresis = 0;
     if (g_hysteresis > 50) g_hysteresis = 50;
 
@@ -183,10 +196,16 @@ int openpete_mod_entry(const openpete_mod_api_t* api, openpete_mod_t* self) {
         coop_log(OP_MOD_LOG_ERROR, "could not allocate the extra block");
         return 1;
     }
+    g_respawn_vaddr = api->guest_alloc(self, sizeof(CoopRespawnArena), 4, 0, &view);
+    if (g_respawn_vaddr == 0) {
+        coop_log(OP_MOD_LOG_ERROR, "could not allocate the respawn block");
+        return 1;
+    }
 
 
     if (coop_players_install() != 0 || coop_draw_install() != 0 ||
-        coop_gates_install() != 0 || coop_pad_install() != 0)
+        coop_gates_install() != 0 || coop_pad_install() != 0 ||
+        coop_respawn_install() != 0)
         return 1;
     api->register_toggle_hook(self, on_toggle);
     coop_mobys_track();
