@@ -30,7 +30,8 @@ extern openpete_mod_t*           g_self;
  * ---------------------------------------------------------------------- */
 #define RA_GAMEPLAY_SPYRO_TICK 0x80033AE0u  /* jal func_8004A200 at 0x80033AD8 */
 #define RA_GAMEPLAY_CAMERA     0x80033B54u  /* jal CameraUpdate  at 0x80033B4C */
-#define RA_GAMEPLAY_MOBY_UPDATE 0x80033AACu /* jalr g_UpdateMoby at 0x80033AA4 */
+#define RA_GAMEPLAY_ENV_UPDATE 0x80033A98u  /* jal func_8002A6FC at 0x80033A90,
+                                               immediately before jalr g_UpdateMoby */
 /* Spyro's model renderer, func_80023AC4, called from the sequence draws: */
 #define RA_FLYIN_MODEL         0x8001A0E0u  /* func_8001A050: gamestates 1 and 9 */
 #define RA_FLYOUT_MODEL        0x8001C96Cu  /* func_8001C694: gamestate 10 */
@@ -101,7 +102,8 @@ typedef struct {
 
 typedef struct {
     uint8_t  owner[MOBY_MAX];      /* 0 player 1, 1 player 2, 2 dead slot */
-    uint8_t  stash[MOBY_MAX * 2];  /* m_WasDrawn and m_UpdateDistance while masked */
+    uint8_t  unused_was_stash[MOBY_MAX * 2]; /* masking retired 2026-09-13; kept
+                                               so v0.4.0 savestates stay valid */
     uint32_t p2_sparx;             /* guest Moby*, 0 = none spawned */
     uint32_t sparx1_seen;          /* last g_Sparx seen: level rebuild detector */
     uint32_t sparx_spawns_level;   /* spawns since the last rebuild; capped */
@@ -141,7 +143,7 @@ typedef struct {
     unsigned seeds, level_reseeds, deaths, handovers, teleports;
     unsigned view_swaps;
     unsigned p2_draws, p2_flame_draws, flyin_draws;
-    unsigned moby_two_pass, moby_single_pass, moby_fns_hooked;
+    unsigned moby_two_pass, moby_single_pass, list_dropped;
     unsigned sparx_spawns, pushes;
     unsigned owner_flips;
     unsigned individual_respawns, double_deaths, sparx_heals;
@@ -183,7 +185,8 @@ int32_t coop_gamestate(void);
 int32_t coop_level_id(void);
 
 /* coop_mobys.c */
-void coop_mobys_track(void);
+int  coop_mobys_install(void);
+int  coop_mobys_p2_pass(CPUState* cpu);
 void coop_mobys_identities_swapped(void);
 
 /* coop_respawn.c */

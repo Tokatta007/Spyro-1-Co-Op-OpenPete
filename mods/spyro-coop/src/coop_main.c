@@ -102,13 +102,13 @@ void coop_publish_status(void) {
     coop_status("P2 drawn %u times, flame %u times, portal wingman %u times%s",
                      g_stats.p2_draws, g_stats.p2_flame_draws, g_stats.flyin_draws,
                      g_draw_enabled ? "" : " (drawing OFF in settings)");
-    coop_status("Moby passes: two-player %u, single %u; update functions hooked %u",
-                     g_stats.moby_two_pass, g_stats.moby_single_pass, g_stats.moby_fns_hooked);
+    coop_status("Moby passes: two-player %u, single %u; list entries dropped %u",
+                     g_stats.moby_two_pass, g_stats.moby_single_pass, g_stats.list_dropped);
     coop_status("P2 Sparx spawns %u, body pushes %u, moby owner flips %u (switch at %d%% closer)",
                      g_stats.sparx_spawns, g_stats.pushes, g_stats.owner_flips, g_hysteresis);
     coop_status("Mobys in pods (owned as a group): %u, pod merges %u", g_stats.pod_members, g_stats.pod_merges);
-    coop_status("Separate respawn: %s; respawns %u, double deaths %u, Sparx heals %u",
-                g_respawn_enabled ? "on" : "OFF", g_stats.individual_respawns,
+    coop_status("Respawn style: %s; separate respawns %u, double deaths %u, Sparx heals %u",
+                g_respawn_enabled ? "modern" : "original", g_stats.individual_respawns,
                 g_stats.double_deaths, g_stats.sparx_heals);
     for (int i = 0; i < 2; i++)
         coop_status("  P%d camera: on shared vector %u frames, runaway %u frames in %u events, max %u away",
@@ -129,7 +129,7 @@ void coop_publish_status(void) {
         coop_log(OP_MOD_LOG_INFO,
                    "tick %u: ready=%u P1(%d,%d,%d) P2(%d,%d,%d) apart=%u | "
                    "p2ticks=%u p2cams=%u seeds=%u reseeds=%u deaths=%u handovers=%u "
-                   "teleports=%u swaps=%u draws=%u flames=%u flyin=%u | mobys 2p=%u 1p=%u fns=%u sparx=%u pushes=%u flips=%u pods=%u | respawn on=%d solo=%u double=%u heals=%u | cam shared=%u/%u runaway=%u/%u events=%u/%u max=%u/%u | other tick=%u ra=0x%08X other cam=%u ra=0x%08X | "
+                   "teleports=%u swaps=%u draws=%u flames=%u flyin=%u | mobys 2p=%u 1p=%u dropped=%u sparx=%u pushes=%u flips=%u pods=%u | respawn on=%d solo=%u double=%u heals=%u | cam shared=%u/%u runaway=%u/%u events=%u/%u max=%u/%u | other tick=%u ra=0x%08X other cam=%u ra=0x%08X | "
                    "guards probe=%u query=%u | padvsync=%u inswap=%u",
                    g_stats.camera_gameplay, A->ready,
                    p1[0], p1[1], p1[2], p2[0], p2[1], p2[2],
@@ -139,7 +139,7 @@ void coop_publish_status(void) {
                    g_stats.teleports, g_stats.view_swaps,
                    g_stats.p2_draws, g_stats.p2_flame_draws, g_stats.flyin_draws,
                    g_stats.moby_two_pass, g_stats.moby_single_pass,
-                   g_stats.moby_fns_hooked, g_stats.sparx_spawns, g_stats.pushes,
+                   g_stats.list_dropped, g_stats.sparx_spawns, g_stats.pushes,
                    g_stats.owner_flips, g_stats.pod_members,
                    g_respawn_enabled, g_stats.individual_respawns,
                    g_stats.double_deaths, g_stats.sparx_heals,
@@ -171,7 +171,11 @@ int openpete_mod_entry(const openpete_mod_api_t* api, openpete_mod_t* self) {
     g_enabled      = api->config_bool(self, "coop.enabled", 1);
     g_draw_enabled = api->config_bool(self, "coop.draw", 1);
     g_hysteresis = (int)api->config_int(self, "coop.hysteresis", 25);
-    g_respawn_enabled = api->config_bool(self, "coop.respawn", 1);
+    {
+        char style[16];
+        api->config_str(self, "coop.respawn_style", "modern", style, sizeof style);
+        g_respawn_enabled = strcmp(style, "original") != 0;
+    }
     if (g_hysteresis < 0)  g_hysteresis = 0;
     if (g_hysteresis > 50) g_hysteresis = 50;
 
@@ -205,10 +209,9 @@ int openpete_mod_entry(const openpete_mod_api_t* api, openpete_mod_t* self) {
 
     if (coop_players_install() != 0 || coop_draw_install() != 0 ||
         coop_gates_install() != 0 || coop_pad_install() != 0 ||
-        coop_respawn_install() != 0)
+        coop_respawn_install() != 0 || coop_mobys_install() != 0)
         return 1;
     api->register_toggle_hook(self, on_toggle);
-    coop_mobys_track();
 
     coop_log(OP_MOD_LOG_INFO,
              "spyro-coop phase A up: arena %u bytes at 0x%08X, player 2 %s",

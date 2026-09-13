@@ -50,35 +50,46 @@ interpolation is on, just like the gameplay draw. Calling `base()` twice inside
 the renderer's own override does not get the second dragon into the engine's
 per-path bookkeeping either. X1 stands.
 
-### M2. Individual death and respawn: BUILT, awaiting test
+### M2. Individual death and respawn: WORKS, one case untested
 
-Built 2026-09-13 (v0.4.0) in `coop_respawn.c`, ported from `Sp1x2Die`,
-`Sp1x2Ground`, `Sp1x2CaptureSpawn`, `Sp1x2SparxHeal` and `Sp1x2FairyMute`.
-Setting **"Separate respawn"**, on by default.
+Confirmed by the user 2026-09-13 (v0.4.0): each dragon respawns on his own at
+the right place, before and after a checkpoint; after leaving a level he
+returns to the homeworld's true start rather than the portal, which the user
+prefers; the save fairy stays quiet until he walks away; a double death costs
+two lives. **Not yet tried: a death on the last life**, which should be a
+normal game over.
 
-When one dragon dies while the other is alive and a life remains, the game's
-death trigger is not called. One shared life is spent, the lives counter opens
-and shows the new total, and he is placed at the checkpoint (or the level's
-true start, or where the level was entered), stood on the floor with the
-game's own probe, and reset with `ResetSpyroState(1)` plus 90 frames of
-invulnerability. A double death, or a death with no lives left, runs the stock
-sequence, and a double death charges both lives.
+**Now a choice, "Respawn style", at the user's request:** *modern* (the above)
+or *original* (every death reloads both, as retail).
 
-**Changed from PS1, deliberately:**
+**Fixed 2026-09-13 (v0.4.1):** pressing the view-swap key while standing on
+the pedestal let the fairy talk at once. The mute named a player slot, which
+the key trades; it now moves with the dragon, like moby ownership and Sparx.
 
-- **The teleport detector is resampled only for player 1's respawn.** PS1 wrote
-  it for either player. It tracks player 1, so writing player 2's respawn
-  point into it would read as a level restart on the next frame whenever the
-  two were more than `0x4000` apart, and snap the pair together.
-- **Player 1's Sparx is healed only after one of our respawns**, not whenever
-  `g_Sparx` is null, which is also true while a dragon at zero health waits for
-  a butterfly to bring Sparx back. Player 2's Sparx is respawned only once he
-  has health.
+### A4. Engine errors from hooking level code: FIXED in v0.4.1, awaiting test
 
-**To test:** let each dragon die on his own, in a level and on a homeworld,
-before and after touching a checkpoint; die near a rescued dragon's pedestal
-(the save fairy should stay quiet until you walk away); die together; die on
-the last life.
+The v0.4.0 session log held **74,705** lines of `override frame stack overflow
+at 0x8007DA78`, from the moment the game returned from level 11 to level 10.
+The mod had overridden level 11's moby megafunction at that address, and in
+level 10 the same address holds other code that is entered repeatedly, each
+entry nesting through the override until the engine gave up and bypassed it.
+Harmless to play, but about 680 errors a second.
+
+The moby passes no longer hook level code at all. Player 1's pass is the
+game's own megafunction call, with the update list filtered as soon as the
+main-executable builder `func_80051FEC` writes it; player 2's pass runs at
+the start of Spyro's tick. Every hook is now on main-executable code, and the
+engine's "raw-tier addresses" warning is gone with it. See the header of
+`coop_mobys.c`. **Retest the ram, Sparx and nearest-player enemies**, since
+this replaces the mechanism under all three.
+
+### A5. Collision guards refusing coordinates again
+
+The same v0.4.0 session logged **826** probe refusals, after sessions of zero.
+Each is an impossible coordinate a collision routine was asked to use, and
+averted. Possibly related to A4, since much of the session ran with the engine
+bypassing hooks. v0.4.1 logs the first five refusals of each kind with the
+coordinates, the caller and the level.
 
 ---
 

@@ -40,12 +40,25 @@ static int coord_is_mad(uint32_t vec_vaddr, int* mad) {
     return 1;
 }
 
+/* The first few refusals of each kind are logged with the coordinates and the
+   caller, so a burst of them can be traced to its source. */
+static void log_refusal(const char* kind, uint32_t vec_vaddr, uint32_t ra, unsigned count) {
+    if (count > 5)
+        return;
+    int32_t* v = (int32_t*)g_api->guest(vec_vaddr);
+    coop_log(OP_MOD_LOG_WARN,
+             "collision %s refused #%u: (%d,%d,%d) from ra 0x%08X, gamestate %d, level %d",
+             kind, count, v ? v[0] : 0, v ? v[1] : 0, v ? v[2] : 0, ra,
+             coop_gamestate(), coop_level_id());
+}
+
 /* func_8004AE38(Vector3D* start, Vector3D* end): segment probe. The end is
    start plus offset, so checking it alone is enough. */
 static void on_segment_probe(CPUState* cpu) {
     int mad = 0;
     if (coord_is_mad(cpu->a1, &mad) && mad) {
         g_stats.probe_refusals++;
+        log_refusal("probe", cpu->a1, cpu->ra, g_stats.probe_refusals);
         cpu->v0 = 0;                         /* "nothing hit" */
         return;
     }
@@ -58,6 +71,7 @@ static void on_sphere_query(CPUState* cpu) {
     int mad = 0;
     if (coord_is_mad(cpu->a0, &mad) && mad) {
         g_stats.query_refusals++;
+        log_refusal("query", cpu->a0, cpu->ra, g_stats.query_refusals);
         cpu->v0 = 0;
         return;
     }

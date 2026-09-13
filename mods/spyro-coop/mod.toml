@@ -9,20 +9,20 @@
 # Sparx, the dragons pushing apart, and separate death and respawn.
 #
 # uses: `api->override_name` - Spyro's tick, CameraUpdate, two collision routines, PadVSync
-# uses: `api->override_addr` - the current level's moby update, attached when first seen
+# uses: `api->override_name` (more) - the environment update and moby list builder, for the moby passes
 # uses: `api->base` - called twice per frame in the tick and camera overrides, once per player
 # uses: `api->guest_alloc` - one arena for all per-player state, carried by savestates and rewind
 # uses: `api->guest` - swapping state into and out of the game's own globals
 # uses: `api->call` - running the game's model, shadow and flame renderers for player 2
 # uses: `api->binding_down` - the swap_view development key
-# uses: `api->config_bool` - the enable and draw switches
+# uses: `api->config_bool` / `config_int` / `config_str` - the settings
 # uses: `api->register_toggle_hook` - stands player 2 down if the mod is disabled mid-level
 # uses: `api->ui_status` / `api->log` - the readout
 
 [mod]
 id      = "spyro-coop"
 name    = "Spyro Co-Op"
-version = "0.4.0"
+version = "0.4.1"
 game    = "spyro-1"
 api     = 1
 
@@ -69,9 +69,10 @@ group   = "Co-op"
 help    = "How much closer the other dragon must be before an enemy switches to him. 25 is the PS1 value; lower switches sooner (BUGS.md A3)."
 
 [[config]]
-key     = "coop.respawn"
-type    = "bool"
-default = true
-label   = "Separate respawn"
+key     = "coop.respawn_style"
+type    = "string"
+default = "modern"
+items   = [ "modern", "original" ]
+label   = "Respawn style"
 group   = "Co-op"
-help    = "When one dragon dies and the other is alive, only he respawns and one shared life is spent. Off makes any death reload both, as retail."
+help    = "Modern: when one dragon dies and the other is alive, only he respawns and one shared life is spent. Original: any death reloads the checkpoint for both, as the original game does."

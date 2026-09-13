@@ -394,6 +394,11 @@ static void on_spyro_tick(CPUState* cpu) {
         return;
     }
 
+    /* Player 2's moby pass comes first, straight after player 1's, which
+       GamestateUpdate has just run. */
+    if (coop_mobys_p2_pass(cpu))
+        return;                              /* his pass started a sequence */
+
     handover_resume(A);
 
     /* SNAPSHOT BEFORE THE FIRST CONSUMER. Player 1's tick spends the substep
@@ -563,7 +568,6 @@ static void on_camera_update(CPUState* cpu) {
         g_stats.camera_other++;
         g_stats.camera_other_ra = cpu->ra;
         g_api->base(cpu);
-        coop_mobys_track();
         coop_publish_status();
         return;
     }
@@ -594,7 +598,6 @@ static void on_camera_update(CPUState* cpu) {
     }
 
     coop_pad_sample();
-    coop_mobys_track();
     coop_publish_status();
 }
 
