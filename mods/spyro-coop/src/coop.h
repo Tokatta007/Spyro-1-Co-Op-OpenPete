@@ -184,6 +184,8 @@ typedef struct {
     CoopShadow extra[2];       /* shadow slots 2 and 3 */
     uint32_t   sparx[2];       /* their Sparx, guest Moby*, 0 = none */
     int32_t    health_carry[COOP_MAX_PLAYERS][2]; /* per slot: pending, health */
+    int32_t    flight_out[COOP_MAX_PLAYERS];      /* per PLAYER: crashed, sitting out */
+    uint32_t   flight_end_real;                   /* this flight level's Flight1 */
 } CoopPartyArena;
 
 /* ------------------------------------------------------------------------
@@ -260,6 +262,7 @@ typedef struct {
     unsigned padvsync_calls, padvsync_in_swap;
     unsigned menu_opens;          /* Multiplayer page opened from the pause list */
     unsigned effects_played;      /* respawn effects, real and tested */
+    unsigned flight_sit_outs;     /* crashes in a flight level that did not end it */
 } CoopStats;
 
 extern CoopStats g_stats;
@@ -343,6 +346,12 @@ void coop_effects_init(uint32_t fx_vaddr);
 void coop_effect_play(CPUState* cpu, int layers, int person);
 void coop_effects_tick(CPUState* cpu);   /* the test key, and the star's clock */
 void coop_effects_draw(CPUState* cpu);   /* the star, from the scene composer's end */
+
+/* coop_flight.c */
+int  coop_flight_install(void);
+void coop_flight_tick(void);
+int  coop_flight_slot_out(int slot);   /* this slot's dragon crashed in a flight level */
+int  coop_flight_pick_camera(void);    /* slot to trade with slot 0, or 0 */
 
 /* coop_gates.c */
 int  coop_gates_install(void);

@@ -228,7 +228,8 @@ int openpete_mod_entry(const openpete_mod_api_t* api, openpete_mod_t* self) {
     if (coop_players_install() != 0 || coop_draw_install() != 0 ||
         coop_gates_install() != 0 || coop_pad_install() != 0 ||
         coop_respawn_install() != 0 || coop_mobys_install() != 0 ||
-        coop_sound_install() != 0 || coop_menu_install(g_menu_vaddr) != 0)
+        coop_sound_install() != 0 || coop_menu_install(g_menu_vaddr) != 0 ||
+        coop_flight_install() != 0)
         return 1;
     api->register_toggle_hook(self, on_toggle);
 

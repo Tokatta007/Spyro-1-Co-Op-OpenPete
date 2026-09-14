@@ -102,12 +102,21 @@ The user's crystal-dragon idea as a whole is not possible: the crystal's
 shake is its own moby's animation, and spawning that moby starts the rescue
 cutscene. Once one is chosen, the bench's extra options and key can go.
 
-### M8. Flight levels: a crash should sit a player out
+### M8. Flight levels: a crash sits that player out: BUILT (v0.10.0), awaiting play
 
-User request 2026-09-13. Flight levels have no respawns, and a crash ends the
-run for everyone; with several players the one who crashed should wait while
-the others finish. Not investigated yet: the flight crash may not go through
-TriggerRespawnOrGameOver.
+User request 2026-09-13: flight levels have no respawns, and one crash ended
+the run for everyone. Found in the executable: a flight crash never reaches
+the death trigger. Spyro's code calls the level's Flight1 through D_80075694
+instead (three call sites), which starts the results (gamestate 7). The mod
+points that pointer at an empty function it overrides (`coop_flight.c`): a
+crash while another dragon still flies sits the crasher out (not ticked, not
+drawn, the camera moves on if it was his); the last crash, the timer and the
+finish run the real Flight1.
+
+Checked headless in Sunny Flight: with player 2 still flying, player 1's crash
+sat him out and the camera moved to player 2; with both crashed, the results
+ran as retail. Not seen yet: a whole run finished by the remaining players,
+or three or four players.
 
 ### M5. In-game Multiplayer and Color menus: stages 1 to 3 BUILT; stage 4 blocked on the engine
 

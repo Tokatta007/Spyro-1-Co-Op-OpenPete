@@ -537,6 +537,8 @@ static void on_spyro_tick(CPUState* cpu) {
         return;
     }
 
+    coop_flight_tick();
+
     /* The shadows' moby passes come first, straight after slot 0's, which
        GamestateUpdate has just run. */
     if (coop_mobys_p2_pass(cpu))
@@ -587,6 +589,19 @@ static void on_spyro_tick(CPUState* cpu) {
         return;
     }
 
+    /* The camera's dragon crashed in a flight level and sits out: the camera
+       goes to a dragon still flying, as the view key would move it. */
+    {
+        int k = coop_flight_pick_camera();
+        if (k > 0) {
+            swap_all(A, k);
+            A->swapped = 0;
+            trade_persons(k);
+            resample_teleport(A);
+            coop_mobys_identities_swapped(k);
+        }
+    }
+
     int n = coop_seeded_shadows();
     int32_t* anchor   = guest32(OP_GADDR_D_80077798);
     int32_t  saved_anchor[3] = { anchor[0], anchor[1], anchor[2] };
@@ -594,6 +609,9 @@ static void on_spyro_tick(CPUState* cpu) {
     int32_t  after_p1 = *substeps;
 
     for (int k = 1; k <= n; k++) {
+        if (coop_flight_slot_out(k))
+            continue;                                  /* crashed: sits out, frozen */
+
         /* PHASE A INPUT: hand each shadow exactly what slot 0 saw. g_PadBackup
            and the swap flag stay his own. When real controllers arrive, this
            is all that changes. */
@@ -710,6 +728,8 @@ static void on_camera_update(CPUState* cpu) {
 
     int n = coop_enabled() ? coop_seeded_shadows() : 0;
     for (int k = 1; k <= n; k++) {
+        if (coop_flight_slot_out(k))
+            continue;
         swap_all(A, k);
         load_regs(cpu, &regs);
         g_api->base(cpu);                              /* shadow k */

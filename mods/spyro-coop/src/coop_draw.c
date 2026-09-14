@@ -120,6 +120,8 @@ static void draw_player2(CPUState* cpu) {
     int n = coop_seeded_shadows();
 
     for (int k = 1; k <= n; k++) {
+        if (coop_flight_slot_out(k))
+            continue;                  /* crashed in a flight level: out of the race */
         coop_swap_spyro(k);
         A->swapped = (uint32_t)k;  /* lets the PadVSync counter see this window too */
         g_in_extra_draw = 1;
