@@ -69,6 +69,7 @@ extern openpete_mod_t*           g_self;
    sequence; 8, 11 and 12 are the dragon rescue, fairy prompt and balloonist,
    which reposition the live dragon without rebuilding the level. */
 #define GS_PLAYING 0
+#define GS_PAUSED  2
 
 /* How far apart the dragons start, and fly in formation, in world units: 640,
    the PS1 build's spacing. It was 1024 for a while (v0.5.1) to stop the dragons
@@ -162,6 +163,8 @@ typedef struct {
     int32_t  cursor;        /* row on that page */
     uint32_t scratch_used;
     uint8_t  scratch[244];  /* strings and vectors the game reads by pointer */
+    int32_t  pad_cursor;    /* Colors page: the controller's cell (players 2-4) */
+    uint32_t pad_held;      /* the controller's buttons last frame, for presses */
 } CoopMenuArena;
 
 /* ------------------------------------------------------------------------

@@ -59,9 +59,11 @@ void coop_pad_status(void) {
    button, keyboard included, works as before.
 
    That also took the stick away from the menus, the only way the controller
-   could move through them. So outside gameplay (pause menu, dialogue, level
-   results) the controller's buttons are added to player 1's too, and anyone
-   can drive a menu. In gameplay the controller belongs to the dragons. */
+   could move through them. Outside gameplay and the pause menu (dialogue,
+   level results) the controller's buttons are added to player 1's, so either
+   can answer. The pause menu is player 1's alone, as the user asked
+   (v0.11.3); on its Colors page the controller has a cursor of its own
+   (coop_menu.c). In gameplay the controller belongs to the dragons. */
 #define PADBUF_STATUS  0
 #define PADBUF_TYPE    1
 #define PADBUF_BUTTONS 2          /* two bytes, big end first, active low */
@@ -76,7 +78,7 @@ static void player1_pad_rules(void) {
         return;                              /* nothing connected */
     if (buf[PADBUF_TYPE] == PAD_TYPE_DUALSHOCK)
         buf[PADBUF_TYPE] = PAD_TYPE_DIGITAL;
-    if (coop_gamestate() != GS_PLAYING) {
+    if (coop_gamestate() != GS_PLAYING && coop_gamestate() != GS_PAUSED) {
         uint32_t extra = coop_controls_now() & 0xFFFFu;
         uint32_t held  = ~(((uint32_t)buf[PADBUF_BUTTONS] << 8) | buf[PADBUF_BUTTONS + 1]) & 0xFFFFu;
         held |= extra;

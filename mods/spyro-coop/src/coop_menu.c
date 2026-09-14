@@ -255,6 +255,8 @@ static void multiplayer_adjust(CPUState* cpu, int delta) {
     case MP_COLORS:
         m->page = PAGE_COLORS;
         m->cursor = 0;
+        m->pad_cursor = -1;                  /* placed on the controller's first input */
+        m->pad_held = coop_controls_now();   /* a held button is not a press */
         chime(cpu, SND_PICK);
         return;
     default:
@@ -264,26 +266,46 @@ static void multiplayer_adjust(CPUState* cpu, int delta) {
     chime(cpu, SND_PICK);
 }
 
-/* A column belongs to a player who is in the game. The others are drawn gray
-   and the cursor steps over them. */
-static int color_cell_active(int cell) {
-    return cell >= COLOR_DONE || cell / 4 < g_settings.players;
+/* TWO CURSORS ON THE COLORS PAGE (v0.11.3, the user's request). With players
+   2 to 4 on the controller, each player picks their own color:
+     - player 1 (the game's pad) moves over the P1 column and DONE, and only
+       he leaves the page;
+     - the controller has a cursor of its own over the other players'
+       columns, with the same buttons except that it cannot leave. One
+       controller serves players 2 to 4 for now, so it reaches all three.
+   With "Copy player 1", player 1 reaches every column, as before.
+   A column belongs to a player who is in the game; the others are drawn gray
+   and neither cursor lands on them. */
+enum { WHO_PLAYER1, WHO_CONTROLLER };
+
+static int shared_controls(void) {
+    return g_settings.extra_controls != EXTRA_CONTROLS_CONTROLLER;
 }
 
-static int color_step(int cell, int dir) {
+static int color_cell_allowed(int cell, int who) {
+    if (cell >= COLOR_DONE)
+        return who == WHO_PLAYER1;
+    int p = cell / 4;
+    if (p >= g_settings.players)
+        return 0;
+    if (shared_controls())
+        return who == WHO_PLAYER1;
+    return (who == WHO_PLAYER1) ? (p == 0) : (p != 0);
+}
+
+static int color_step(int cell, int dir, int who) {
     for (int i = 0; i <= COLOR_DONE; i++) {
         cell = (cell + dir + COLOR_DONE + 1) % (COLOR_DONE + 1);
-        if (color_cell_active(cell))
+        if (color_cell_allowed(cell, who))
             return cell;
     }
-    return COLOR_DONE;
+    return -1;
 }
 
-static void colors_adjust(CPUState* cpu, int delta) {
-    CoopMenuArena* m = M();
-    if (m->cursor >= COLOR_DONE)
+static void colors_adjust(CPUState* cpu, int cell, int delta) {
+    if (cell < 0 || cell >= COLOR_DONE)
         return;
-    uint8_t* v = &g_settings.color[m->cursor / 4][m->cursor % 4];
+    uint8_t* v = &g_settings.color[cell / 4][cell % 4];
     *v = (uint8_t)((*v + delta) & 0xFF);     /* wraps, as on PS1 */
     coop_settings_changed();
     chime(cpu, SND_PICK);
@@ -295,14 +317,18 @@ static void page_input(CPUState* cpu, int32_t down) {
 
     if (down & (PAD_DOWN | PAD_UP)) {
         int dir = (down & PAD_DOWN) ? 1 : -1;
-        m->cursor = colors ? color_step(m->cursor, dir)
-                           : (m->cursor + dir + MP_ROWS) % MP_ROWS;
+        if (colors) {
+            int c = color_step(m->cursor, dir, WHO_PLAYER1);
+            if (c >= 0) m->cursor = c;
+        } else {
+            m->cursor = (m->cursor + dir + MP_ROWS) % MP_ROWS;
+        }
         chime(cpu, SND_MOVE);
     } else if (down & (PAD_LEFT | PAD_RIGHT)) {
-        if (colors) colors_adjust(cpu, (down & PAD_RIGHT) ? 1 : -1);
+        if (colors) colors_adjust(cpu, m->cursor, (down & PAD_RIGHT) ? 1 : -1);
         else        multiplayer_adjust(cpu, (down & PAD_RIGHT) ? 1 : -1);
     } else if (colors && (down & (PAD_L2 | PAD_R2))) {
-        colors_adjust(cpu, (down & PAD_R2) ? 16 : -16);   /* coarse */
+        colors_adjust(cpu, m->cursor, (down & PAD_R2) ? 16 : -16);   /* coarse */
     } else if (colors && (down & PAD_SQUARE)) {
         if (m->cursor < COLOR_DONE) {
             coop_settings_reset_color(m->cursor / 4);     /* the column you stand in */
@@ -314,11 +340,40 @@ static void page_input(CPUState* cpu, int32_t down) {
     } else if (down & PAD_CROSS) {
         if (colors) {
             if (m->cursor == COLOR_DONE) back_to_multiplayer(cpu);   /* one level, never two */
-            else                         colors_adjust(cpu, 1);
+            else                         colors_adjust(cpu, m->cursor, 1);
         } else {
             if (m->cursor == MP_DONE) back_to_list(cpu);
             else                      multiplayer_adjust(cpu, 1);
         }
+    }
+}
+
+/* The controller on the Colors page: presses from its own buttons, against
+   last frame's (kept in the menu block, so rewind agrees). */
+static void controller_colors_input(CPUState* cpu) {
+    CoopMenuArena* m = M();
+    uint32_t held = coop_controls_now();
+    uint32_t down = held & ~m->pad_held;
+    m->pad_held = held;
+    if (m->page != PAGE_COLORS || shared_controls() || g_settings.players < 2)
+        return;
+    if (!color_cell_allowed(m->pad_cursor, WHO_CONTROLLER)) {
+        int c = color_step(3, 1, WHO_CONTROLLER);    /* the first cell after P1's */
+        m->pad_cursor = (c >= 0) ? c : 4;
+    }
+    if (down & (PAD_DOWN | PAD_UP)) {
+        int c = color_step(m->pad_cursor, (down & PAD_DOWN) ? 1 : -1, WHO_CONTROLLER);
+        if (c >= 0) m->pad_cursor = c;
+        chime(cpu, SND_MOVE);
+    } else if (down & (PAD_LEFT | PAD_RIGHT)) {
+        colors_adjust(cpu, m->pad_cursor, (down & PAD_RIGHT) ? 1 : -1);
+    } else if (down & (PAD_L2 | PAD_R2)) {
+        colors_adjust(cpu, m->pad_cursor, (down & PAD_R2) ? 16 : -16);
+    } else if (down & PAD_CROSS) {
+        colors_adjust(cpu, m->pad_cursor, 1);
+    } else if (down & PAD_SQUARE) {
+        coop_settings_reset_color(m->pad_cursor / 4);
+        chime(cpu, SND_PICK);
     }
 }
 
@@ -340,6 +395,7 @@ static void on_pause_update(CPUState* cpu) {
 
     if (m->page != PAGE_NONE) {
         page_input(cpu, down);
+        controller_colors_input(cpu);
         consumed = down;                     /* the stock list sees nothing */
     } else {
         int c = *cur;
@@ -616,7 +672,8 @@ static void draw_colors(CPUState* cpu) {
     static const char* const heads[COOP_MAX_PLAYERS] = { "P1", "P2", "P3", "P4" };
     static const int y[4] = { 128, 142, 156, 170 };
 
-    Built sel = { 0, 0 };
+    Built sel = { 0, 0 }, pad_sel = { 0, 0 };
+    int pad_cursor = (!shared_controls() && g_settings.players > 1) ? m->pad_cursor : -1;
     for (int p = 0; p < COOP_MAX_PLAYERS; p++) {
         int shade = (p < g_settings.players) ? SHADE_NORMAL : SHADE_DISABLED;
         text_centered(cpu, heads[p], k_col_x[p], 112, shade);
@@ -624,6 +681,8 @@ static void draw_colors(CPUState* cpu) {
             Built b = number(cpu, g_settings.color[p][k], k_col_x[p], y[k], shade);
             if (m->cursor == p * 4 + k)
                 sel = b;
+            if (pad_cursor == p * 4 + k)
+                pad_sel = b;
         }
     }
     for (int k = 0; k < 4; k++)
@@ -634,6 +693,7 @@ static void draw_colors(CPUState* cpu) {
 
     hint(cpu, "L2 R2 FAST  SQUARE RESET", 214);
     wobble(sel, 0);
+    wobble(pad_sel, 0);
     for (int p = 0; p < COOP_MAX_PLAYERS; p++)
         swatch(cpu, p, k_col_x[p]);
 #if COOP_PREVIEW_DRAGONS

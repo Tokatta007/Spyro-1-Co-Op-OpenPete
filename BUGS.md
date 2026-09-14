@@ -369,7 +369,7 @@ the native renderer's choice.
 For the author note: two Spyro model draws in one frame are not depth-ordered
 by the native renderer the way PsyCross orders them.
 
-### X2. Extra players' controls: one controller for players 2-4, v0.11.2, awaiting test
+### X2. Extra players' controls: one controller for players 2-4, v0.11.3, awaiting test
 
 OpenPete still never fills the game's second pad buffer (`docs/PORTING.md`,
 B1), so the mod reads the extra players' controller from the host and builds
@@ -405,4 +405,18 @@ it as a digital pad, so the game ignores its sticks (`coop_pad.c`). Headless:
 the movie's stick no longer moves player 1, the d-pad still does. Outside
 gameplay the controller's buttons are added to player 1's, so the controller
 can drive menus and dialogue. The "XInput Controller #1" in the log predates
-the DualSense; its vendor ID is 046D (Logitech).
+the DualSense; its vendor ID is 046D (Logitech), most likely the user's mouse.
+
+**v0.11.2 test:** the controller moved only players 2 to 4 and worked in the
+pause menu, but WASD stopped moving player 1 (it drives the left stick, now
+hidden), and after a view swap the keyboard moved the camera's dragon while
+the controller moved player 1's.
+
+**v0.11.3:** input follows the player, not the slot: the slot holding player
+1 gets the game's pad, every other slot the controller's (slot 0 by writing
+the controller's record over g_Pad before his tick). WASD is on the d-pad in
+openpete.toml. The pause menu is player 1's again; on the Colors page player
+1 edits his column and DONE, and the controller has its own cursor over the
+other active players' columns (`coop_menu.c`, TWO CURSORS). Headless: the
+walk test still moves only player 1 with "Controller" and everyone with
+"Copy"; the Colors page draws.

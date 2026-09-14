@@ -655,8 +655,14 @@ static void maybe_swap_view(CoopArena* A) {
  * "Copy player 1" gives every extra dragon player 1's input, as before; the
  * headless tests need it.
  *
- * Slot 0 always reads the game's pad, so after the dev view key the keyboard
- * drives whichever dragon the camera is on.
+ * INPUT FOLLOWS THE PLAYER, not the slot (v0.11.3). After the view key, the
+ * camera's slot can hold player 3's dragon and a shadow player 1's. So the
+ * slot holding player 1 gets the game's own pad, and every other slot the
+ * controller's: for slot 0 that means writing the controller's record over
+ * the live g_Pad before his tick. It stays there through his camera update,
+ * whose L2/R2 are his too, until the next PadVSync decodes player 1's pad
+ * afresh. Seen by the user in v0.11.2: after a view swap the keyboard moved
+ * the camera's dragon and the controller moved player 1's.
  * ---------------------------------------------------------------------- */
 #define PADREC_DOWN        0x00
 #define PADREC_RELEASED    0x04
@@ -764,6 +770,9 @@ static void on_spyro_tick(CPUState* cpu) {
     g_in_gameplay_tick = 1;
     g_ticking_player   = 0;
     int32_t portal_before = level_transition();
+    if (g_settings.extra_controls == EXTRA_CONTROLS_CONTROLLER &&
+        coop_party_arena()->person[0] != 0)
+        memcpy(guest8(OP_GADDR_g_Pad), extra_pad, sizeof extra_pad);   /* see CONTROLS */
     g_api->base(cpu);                                  /* slot 0 */
     note_portal_touch(portal_before, 0);
     g_in_gameplay_tick = 0;
@@ -820,7 +829,8 @@ static void on_spyro_tick(CPUState* cpu) {
         /* INPUT: the extra players' pad (see CONTROLS). g_PadBackup and the
            swap flag stay his own. */
         CoopShadowView v = coop_shadow(k);
-        memcpy(v.pad + PAD_SHADOW_PAD, extra_pad, sizeof extra_pad);
+        const uint8_t* his = (coop_party_arena()->person[k] == 0) ? p1_pad : extra_pad;
+        memcpy(v.pad + PAD_SHADOW_PAD, his, sizeof extra_pad);
         memcpy(v.pad + PAD_SHADOW_ACTIVEPAD, &p1_active_pad, 4);
 
         swap_all(A, k);
