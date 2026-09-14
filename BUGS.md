@@ -315,6 +315,24 @@ pixel is along the purple-to-yellow axis, rather than an on/off hue window,
 so blend pixels get a matching share of the new color. The rest is kept for
 the next message to the OpenPete author.
 
+**Planned design, agreed with the user 2026-09-14 (waits for the engine
+feature; the RGB page ships until then):**
+
+- Two recolored groups per player: SKIN (the purple body) and ACCENT (the
+  yellow horns, crest and belly; whether the red wing membranes join ACCENT
+  or stay stock is to be decided by looking). Everything else stays stock.
+- Recolor by hue, keeping each pixel's own brightness, so shading stays the
+  game's and no strength setting is needed. Blend pixels between the groups
+  take a proportional share of each (see the gray fringe above).
+- Colors page rows, per player column: SKIN, SKIN SHADE, ACCENT, ACCENT
+  SHADE, then DONE (four rows, as today). SKIN and ACCENT cycle the color
+  wheel in about 24 named steps (RED, ORANGE, GOLD, GREEN, TEAL, BLUE,
+  PURPLE, PINK...) plus WHITE, GRAY and BLACK at the end; L2/R2 jump faster.
+  Each SHADE is its own row (for example DARK, NORMAL, LIGHT, PASTEL), so dark
+  skin with bright horns is possible. Two swatches per column show the
+  result. The M panel gets color-wheel pickers for the same settings.
+- Existing RGB colors convert to the nearest SKIN color on first load.
+
 ### M3. Sounds from player 2's side: BUILT in v0.4.2, awaiting test
 
 `coop_sound.c`, from `Sp1x2SoundListenerDistance`: a 3D sound's distance is
