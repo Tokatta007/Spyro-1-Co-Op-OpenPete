@@ -250,9 +250,15 @@ static void arm_script_focus(void) {
 
 /* Out along the live dragon's wing line. SHARED with the portal fly-in draw
    (coop_draw.c), exactly as on PS1, so the dragons fly in with the spacing
-   they are seeded at and do not jump sides when the sequence ends. Heading is
-   (cos, -sin), established by observation, so the wing line is (sin, cos).
-   Slot 1 flies on his right, slot 2 on his left, slot 3 outside slot 1. */
+   they are seeded at and do not jump sides when the sequence ends. Slot 1
+   flies on one wing, slot 2 on the other, slot 3 outside slot 1.
+
+   Heading is (cos, sin) of the yaw, so the wing line is (-sin, cos). This was
+   (sin, cos) until 2026-09-13, "established by observation", but every portal
+   observed then faced along an axis, where the two agree. The Stone Hill exit
+   in Artisans faces about 228 degrees, and there the old line lay along the
+   flight path: the dragons left the portal in single file (seen by the user;
+   measured headless, the offset was parallel to the motion). */
 void coop_formation_offset(int slot, int32_t out[3]) {
     static const int k_steps[COOP_MAX_PLAYERS] = { 0, 1, -1, 2 };
     int step = (slot >= 0 && slot < COOP_MAX_PLAYERS) ? k_steps[slot] : 1;
@@ -261,8 +267,8 @@ void coop_formation_offset(int slot, int32_t out[3]) {
     int16_t* cos8 = (int16_t*)g_api->guest(OP_GADDR_D_8006CC78);  /* SIGNED */
     int32_t c = cos8[b];
     int32_t s = cos8[(b - 64) & 0xFF];              /* sin = cos(yaw - 90) */
-    out[0] = (s * P2_START_OFFSET * step) >> 12;
-    out[1] = (c * P2_START_OFFSET * step) >> 12;
+    out[0] = (-s * P2_START_OFFSET * step) >> 12;
+    out[1] = ( c * P2_START_OFFSET * step) >> 12;
     out[2] = 0;
 }
 
@@ -521,50 +527,82 @@ static void separate_players(CoopArena* A) {
  * reproduced headless). Leaving a level, every dragon glides out of the portal
  * in formation (Spyro state 15, walking state 9) until he finds the landing.
  * Slot 3 flies 1280 units out to the side, and at the Sunny Flight portal in
- * Artisans that misses the ground: he glided on in a straight line forever,
- * through the scenery, and never came back under control. Retail never meets
- * this because Spyro exits dead centre.
+ * Artisans that misses the ground: he glides on in a straight line forever,
+ * through the scenery, out of anyone's control. Retail never meets this
+ * because Spyro exits dead centre.
  *
- * So a shadow still in the exit glide a second after slot 0 has landed is set
- * down beside him: a copy of slot 0's state, keeping his own health, half his
- * formation step out. The body separation spreads them from there.
+ * So a dragon still in the exit glide STRAY_TICKS after another has landed is
+ * set down beside that one: a copy of the landed dragon's state, keeping his
+ * own health, half his formation step out. The body separation spreads them
+ * from there. Any slot, the camera's included.
+ *
+ * v0.10.2 waited for SLOT 0 to land and never helped slot 0 himself. After a
+ * view swap onto the stray, or while the camera's dragon was still gliding,
+ * nobody was set down, and the user watched player 4 fly off for up to twenty
+ * seconds (log, v0.10.2).
  * ---------------------------------------------------------------------- */
 #define SPYRO_OFF_STATE         0x078
 #define SPYRO_OFF_WALKING_STATE 0x07C
-#define STRAY_TICKS             60
+#define STRAY_TICKS             45   /* the others land within about 10 */
 
 static int in_exit_glide(const uint8_t* spyro) {
     return *(const int32_t*)(spyro + SPYRO_OFF_STATE) == 15 &&
            *(const int32_t*)(spyro + SPYRO_OFF_WALKING_STATE) == 9;
 }
 
+/* A slot's Spyro state, whoever is live. Offsets inside the first region
+   (g_Spyro) are the same in the live struct and a packed shadow. */
+static uint8_t* slot_spyro(int slot) {
+    return slot == 0 ? guest8(OP_GADDR_g_Spyro) : coop_shadow(slot).spyro;
+}
+
+/* Make slot `dst` a copy of slot `src`'s dragon state, keeping dst's health. */
+static void copy_dragon(CoopArena* A, int dst, int src) {
+    int32_t health = *(int32_t*)(slot_spyro(dst) + SPYRO_OFF_HEALTH);
+    uint8_t tmp[SPYRO_STATE_BYTES];
+    if (src == 0) {
+        walk(k_spyro_regions, COUNT(k_spyro_regions), coop_shadow(dst).spyro, 0);
+    } else if (dst == 0) {
+        memcpy(tmp, coop_shadow(src).spyro, sizeof tmp);
+        walk(k_spyro_regions, COUNT(k_spyro_regions), tmp, 1);  /* tmp -> live */
+    } else {
+        memcpy(coop_shadow(dst).spyro, coop_shadow(src).spyro, SPYRO_STATE_BYTES);
+    }
+    *(int32_t*)(slot_spyro(dst) + SPYRO_OFF_HEALTH) = health;
+    (void)A;
+}
+
 static void land_strays(CoopArena* A) {
     CoopPartyArena* P = coop_party_arena();
     int n = coop_seeded_shadows();
-    int leader_gliding = in_exit_glide(guest8(OP_GADDR_g_Spyro));
-    for (int k = 1; k <= n; k++) {
-        CoopShadowView v = coop_shadow(k);
-        if (leader_gliding || !in_exit_glide(v.spyro)) {
-            P->stray_ticks[k] = 0;
+    int gliding[COOP_MAX_PLAYERS] = { 0 };
+    int landed = -1;
+    for (int s = 0; s <= n; s++) {
+        gliding[s] = in_exit_glide(slot_spyro(s));
+        if (!gliding[s] && landed < 0)
+            landed = s;
+    }
+    for (int s = 0; s <= n; s++) {
+        if (!gliding[s] || landed < 0) {
+            P->stray_ticks[s] = 0;
             continue;
         }
-        if (++P->stray_ticks[k] < STRAY_TICKS)
+        if (++P->stray_ticks[s] < STRAY_TICKS)
             continue;
-        P->stray_ticks[k] = 0;
+        P->stray_ticks[s] = 0;
 
-        int32_t health = *(int32_t*)(v.spyro + SPYRO_OFF_HEALTH);
-        walk(k_spyro_regions, COUNT(k_spyro_regions), v.spyro, 0);  /* copy slot 0 */
-        *(int32_t*)(v.spyro + SPYRO_OFF_HEALTH) = health;
+        copy_dragon(A, s, landed);
         int32_t off[3];
-        coop_formation_offset(k, off);
-        int32_t* pos = (int32_t*)(v.spyro + SPYRO_OFF_POSITION);
+        coop_formation_offset(s == 0 ? landed : s, off);
+        int32_t* pos = (int32_t*)(slot_spyro(s) + SPYRO_OFF_POSITION);
         pos[0] += off[0] / 2;
         pos[1] += off[1] / 2;
+        if (s == 0)
+            resample_teleport(A);            /* he moved: not a level restart */
         g_stats.strays_landed++;
         coop_log(OP_MOD_LOG_INFO, "player %d missed the portal landing; set down beside player %d",
-                 coop_physical_player(k) + 1, coop_physical_player(0) + 1);
+                 coop_physical_player(s) + 1, coop_physical_player(landed) + 1);
     }
-    (void)A;
 }
 
 /* ------------------------------------------------------------------------

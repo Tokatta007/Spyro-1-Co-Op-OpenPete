@@ -102,7 +102,7 @@ The user's crystal-dragon idea as a whole is not possible: the crystal's
 shake is its own moby's animation, and spawning that moby starts the rescue
 cutscene. Once one is chosen, the bench's extra options and key can go.
 
-### M8. Flight levels: a crash sits that player out: BUILT (v0.10.2), awaiting play
+### M8. Flight levels: a crash sits that player out: BUILT (v0.10.3), awaiting play
 
 User request 2026-09-13: flight levels have no respawns, and one crash ended
 the run for everyone. Found in the executable: a flight crash never reaches
@@ -153,6 +153,25 @@ reproduced headless and fixed in v0.10.2:
   tick touched the portal now owns its path moby, and that moby's whole pod,
   until the transition ends. Headless, player 1 now enters on the same frame
   as a solo Spyro; before the fix he pushed against the frame for 2.3 seconds.
+
+The third play (v0.10.2): the portal and the flight level itself were fine.
+Two portal-exit problems remained, fixed in v0.10.3:
+
+- **Player 4 still flew off, sometimes for twenty seconds.** The set-down
+  only acted once slot 0 had landed, and never on slot 0 itself, so after a
+  view swap onto the stray nothing happened. Now any dragon still in the exit
+  glide 45 ticks after any other has landed is set down beside that one.
+- **Stone Hill's exit came out in single file.** The formation's wing line
+  was (sin, cos) of the yaw, "established by observation" at portals that all
+  faced along an axis, where it agrees with the true (-sin, cos). Stone Hill
+  faces about 228 degrees; measured headless, the old offset ran parallel to
+  the flight path. It is perpendicular now, in the fly-out draw and the seed.
+
+**Open: the Artisans whirlwind to the Town Square bridge stopped halfway**
+for every dragon after a Town Square visit (user, v0.10.2). Not reproduced:
+headless, four dragons placed in it (class 421/422 at 70513,65608) all rise
+to 13492 exactly as a solo Spyro, with or without others standing beside
+it. Waiting on a savestate at the whirlwind.
 
 ### M5. In-game Multiplayer and Color menus: stages 1 to 3 BUILT; stage 4 blocked on the engine
 
