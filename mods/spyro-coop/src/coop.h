@@ -355,6 +355,7 @@ void coop_effects_draw(CPUState* cpu);   /* the star, from the scene composer's 
 /* coop_controls.c */
 void     coop_controls_sample(void);   /* present thread, every present */
 uint32_t coop_controls_held(void);     /* tick: the extra players' PS1 buttons */
+uint32_t coop_controls_now(void);      /* the same, any context, no bookkeeping */
 void     coop_controls_status(void);
 
 /* coop_flight.c */

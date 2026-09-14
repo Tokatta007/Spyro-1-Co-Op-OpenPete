@@ -2,29 +2,19 @@
  * @file coop_controls.c
  * @brief Where players 2 to 4 get their buttons from (2026-09-13).
  *
- * THE PROBLEM. Spyro 1 reads one controller and OpenPete never fills the
- * second pad buffer (coop_pad.c), so the mod reads the extra players' input
- * from the host itself. Two routes exist, and the first test of v0.11.0 found
- * the obvious one short:
+ * WHY IMGUI. Spyro 1 reads one controller and OpenPete never fills the second
+ * pad buffer (coop_pad.c), so the mod reads the extra players' controller
+ * from the host itself. [[binding]] rows with gamepad names looked like the
+ * way, and failed twice in the user's tests (v0.11.0, v0.11.1): the engine
+ * takes at most 8 rows per mod, too few for a controller, and rows naming
+ * "pad:south" through "pad4:south" never once read as held with a DualSense
+ * plugged in. The engine's overlay is Dear ImGui, though, and a mod UI
+ * section flagged OPENPETE_MOD_UI_ALWAYS runs on every present, where
+ * ImGui_IsKeyDown(ImGuiKey_GamepadFaceDown) and friends are legal. That read
+ * every button, the d-pad and the stick in the v0.11.1 test.
  *
- *   - [[binding]] rows with gamepad names ("pad:south"). The engine accepts
- *     at most 8 rows per mod (the manifest docs), so a full controller does
- *     not fit, and with the DualSense plugged in, the 7 that were accepted
- *     never read as held. Which controller "pad:" means with several devices
- *     connected (the user's log lists a DualSense, an "XInput Controller #1"
- *     and a Razer keyboard that SDL also reports as a pad) is unknown.
- *   - ImGui's own gamepad keys. The engine's overlay is Dear ImGui, and a mod
- *     UI section flagged OPENPETE_MOD_UI_ALWAYS runs on every present, where
- *     ImGui_IsKeyDown(ImGuiKey_GamepadFaceDown) and friends are legal. No row
- *     limit and every button. Whether the engine's backend feeds the gamepad
- *     into ImGui with its overlay closed is what this build finds out; ImGui
- *     backends only do so with NavEnableGamepad set, so it is set here.
- *
- * THIS BUILD MEASURES BOTH. The present pass samples ImGui into a host
- * value; the tick reads it. Four probe bindings put cross on pad:, pad2:,
- * pad3: and pad4:, to learn which slot the DualSense is. The first input seen
- * on each route is logged, and the M panel shows them live. Players 2 to 4
- * follow ImGui's buttons, plus cross from any probe that reads.
+ * ImGui backends feed gamepads only with NavEnableGamepad set, so it is set
+ * here. The present pass samples into a host value; the tick reads it.
  *
  * Host input read in a tick diverges a replay, which the SDK allows and warns
  * about, as with the view key.
@@ -54,7 +44,6 @@ OPENPETE_MOD_IMGUI()
    one frame of a half-updated button set at worst. */
 static volatile uint32_t g_imgui_held;
 static volatile int      g_imgui_backend_pad;   /* io BackendFlags HasGamepad */
-static volatile int      g_imgui_nav_was_off;   /* we turned NavEnableGamepad on */
 static volatile uint32_t g_imgui_samples;
 
 static const struct { ImGuiKey key; uint32_t bit; } k_imgui_buttons[] = {
@@ -83,10 +72,7 @@ void coop_controls_sample(void) {
     ImGuiIO* io = ImGui_GetIO();
     if (!io)
         return;
-    if (!(io->ConfigFlags & ImGuiConfigFlags_NavEnableGamepad)) {
-        io->ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
-        g_imgui_nav_was_off = 1;
-    }
+    io->ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     g_imgui_backend_pad = (io->BackendFlags & ImGuiBackendFlags_HasGamepad) != 0;
 
     uint32_t held = 0;
@@ -101,42 +87,25 @@ void coop_controls_sample(void) {
     g_imgui_samples++;
 }
 
-static const char* const k_probe_names[4] = {
-    "probe_pad1_cross", "probe_pad2_cross", "probe_pad3_cross", "probe_pad4_cross" };
+static uint32_t g_seen_imgui;   /* display and log-once only */
 
-static uint32_t g_seen_imgui, g_seen_probe[4];   /* display and log-once only */
-static uint32_t g_probe_now;                     /* bit k: probe k held this tick */
+/* The controller's buttons as sampled, for any context. */
+uint32_t coop_controls_now(void) {
+    return g_imgui_held;
+}
 
 /* Tick context: the extra players' buttons this tick. */
 uint32_t coop_controls_held(void) {
     uint32_t held = g_imgui_held;
-    g_probe_now = 0;
-    for (int k = 0; k < 4; k++)
-        if (g_api->binding_down(g_self, k_probe_names[k]))
-            g_probe_now |= 1u << k;
-
     if (held && !g_seen_imgui)
-        coop_log(OP_MOD_LOG_INFO, "controls: ImGui gamepad input seen (buttons 0x%04X)", held);
+        coop_log(OP_MOD_LOG_INFO, "controls: controller input seen (buttons 0x%04X)", held);
     if (held)
         g_seen_imgui++;
-    for (int k = 0; k < 4; k++)
-        if (g_probe_now & (1u << k)) {
-            if (!g_seen_probe[k])
-                coop_log(OP_MOD_LOG_INFO, "controls: binding %s reads held (pad slot %d)",
-                         k_probe_names[k], k + 1);
-            g_seen_probe[k]++;
-        }
-    if (g_probe_now)
-        held |= PADB_CROSS;
     return held;
 }
 
 void coop_controls_status(void) {
-    coop_status("Controls via ImGui: backend gamepad %s, gamepad nav %s, %u presents, "
-                "buttons now 0x%04X, ticks with input %u",
-                g_imgui_backend_pad ? "yes" : "no",
-                g_imgui_nav_was_off ? "turned on by the mod" : "already on",
-                (unsigned)g_imgui_samples, (unsigned)g_imgui_held, g_seen_imgui);
-    coop_status("Controls via bindings (cross): pad1 %u  pad2 %u  pad3 %u  pad4 %u",
-                g_seen_probe[0], g_seen_probe[1], g_seen_probe[2], g_seen_probe[3]);
+    coop_status("Controller: %s, buttons now 0x%04X, ticks with input %u",
+                g_imgui_backend_pad ? "connected" : "none seen",
+                (unsigned)g_imgui_held, g_seen_imgui);
 }

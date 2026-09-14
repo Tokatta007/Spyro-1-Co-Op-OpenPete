@@ -48,8 +48,46 @@ void coop_pad_status(void) {
                      g_stats.padvsync_calls, g_stats.padvsync_in_swap);
 }
 
+/* PLAYER 1 AND THE CONTROLLER (2026-09-13, the user's v0.11.1 test). With
+   players 2 to 4 on the controller and player 1 on the keyboard, the
+   controller's left stick still moved player 1: OpenPete feeds its stick
+   into player 1's pad buffer whatever openpete.toml says ("none", or a
+   pad slot nothing is plugged into, both tried; reproduced headless with a
+   movie's stick). The game only reads sticks from a DualShock, so here, just
+   before the game decodes the buffer, player 1's pad reports itself as a
+   plain digital pad (HW_TYPE_NON_DUALSHOCK): the stick is ignored and every
+   button, keyboard included, works as before.
+
+   That also took the stick away from the menus, the only way the controller
+   could move through them. So outside gameplay (pause menu, dialogue, level
+   results) the controller's buttons are added to player 1's too, and anyone
+   can drive a menu. In gameplay the controller belongs to the dragons. */
+#define PADBUF_STATUS  0
+#define PADBUF_TYPE    1
+#define PADBUF_BUTTONS 2          /* two bytes, big end first, active low */
+#define PAD_TYPE_DIGITAL   0x41
+#define PAD_TYPE_DUALSHOCK 0x73
+
+static void player1_pad_rules(void) {
+    if (!coop_enabled() || g_settings.extra_controls != EXTRA_CONTROLS_CONTROLLER)
+        return;
+    uint8_t* buf = guest8(OP_GADDR_g_PadBuffer);
+    if (buf[PADBUF_STATUS] != 0)
+        return;                              /* nothing connected */
+    if (buf[PADBUF_TYPE] == PAD_TYPE_DUALSHOCK)
+        buf[PADBUF_TYPE] = PAD_TYPE_DIGITAL;
+    if (coop_gamestate() != GS_PLAYING) {
+        uint32_t extra = coop_controls_now() & 0xFFFFu;
+        uint32_t held  = ~(((uint32_t)buf[PADBUF_BUTTONS] << 8) | buf[PADBUF_BUTTONS + 1]) & 0xFFFFu;
+        held |= extra;
+        buf[PADBUF_BUTTONS]     = (uint8_t)(~held >> 8);
+        buf[PADBUF_BUTTONS + 1] = (uint8_t)~held;
+    }
+}
+
 static void on_pad_vsync(CPUState* cpu) {
     g_stats.padvsync_calls++;
+    player1_pad_rules();
     /* Runs every frame in every gamestate, menus included, so it is where an
        M panel edit is adopted. */
     coop_settings_tick();

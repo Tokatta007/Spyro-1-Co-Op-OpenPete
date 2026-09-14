@@ -369,7 +369,7 @@ the native renderer's choice.
 For the author note: two Spyro model draws in one frame are not depth-ordered
 by the native renderer the way PsyCross orders them.
 
-### X2. Extra players' controls: one controller for players 2-4, TEST BUILD v0.11.1
+### X2. Extra players' controls: one controller for players 2-4, v0.11.2, awaiting test
 
 OpenPete still never fills the game's second pad buffer (`docs/PORTING.md`,
 B1), so the mod reads the extra players' controller from the host and builds
@@ -392,3 +392,17 @@ bindings putting cross on pad:, pad2:, pad3: and pad4:. The first input on
 each is logged and the M panel shows them live. The settings moved to their
 own "Spyro Co-Op" window, since an always section runs outside the Mods
 panel. Player 1's sticks now point at the empty pad4 slot.
+
+**v0.11.1 test: ImGui works.** D-pad, face and shoulder buttons moved players
+2 to 4 only. No probe binding ever read, so the probes are gone. The left
+stick still moved player 1 as well, and Options plus the stick were the only
+controller inputs reaching the menus: OpenPete feeds the controller's stick
+into player 1's pad buffer whatever openpete.toml says ("none" and an empty
+pad4 slot both failed; reproduced headless with a movie's stick).
+
+**v0.11.2:** just before the game decodes player 1's buffer, the mod reports
+it as a digital pad, so the game ignores its sticks (`coop_pad.c`). Headless:
+the movie's stick no longer moves player 1, the d-pad still does. Outside
+gameplay the controller's buttons are added to player 1's, so the controller
+can drive menus and dialogue. The "XInput Controller #1" in the log predates
+the DualSense; its vendor ID is 046D (Logitech).

@@ -14,7 +14,7 @@
 # uses: `api->guest_alloc` - one arena for all per-player state, carried by savestates and rewind
 # uses: `api->guest` - swapping state into and out of the game's own globals
 # uses: `api->call` - running the game's model, shadow and flame renderers for player 2
-# uses: `api->binding_down` - the swap_view development key, and controller slot probes
+# uses: `api->binding_down` - the swap_view development key
 # uses: openpete_imgui.h - reading players 2-4's controller on every present
 # uses: `api->data_dir` - settings.txt, shared by the in-game menu and the M panel
 # uses: openpete_mod_ui.h - the settings panel in the M overlay
@@ -24,7 +24,7 @@
 [mod]
 id      = "spyro-coop"
 name    = "Spyro Co-Op"
-version = "0.11.1"
+version = "0.11.2"
 game    = "spyro-1"
 api     = 1
 
@@ -43,25 +43,3 @@ runahead = "host-fx"
 name    = "swap_view"
 key     = "P"
 purpose = "switch the camera to the other dragon (development aid)"
-
-# Controller probes (coop_controls.c): cross on each pad slot, to learn which
-# slot a controller is. The engine takes at most 8 [[binding]] rows per mod.
-[[binding]]
-name    = "probe_pad1_cross"
-key     = "pad:south"
-purpose = "players 2-4: cross, controller slot 1 (test)"
-
-[[binding]]
-name    = "probe_pad2_cross"
-key     = "pad2:south"
-purpose = "players 2-4: cross, controller slot 2 (test)"
-
-[[binding]]
-name    = "probe_pad3_cross"
-key     = "pad3:south"
-purpose = "players 2-4: cross, controller slot 3 (test)"
-
-[[binding]]
-name    = "probe_pad4_cross"
-key     = "pad4:south"
-purpose = "players 2-4: cross, controller slot 4 (test)"
