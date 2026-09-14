@@ -102,7 +102,7 @@ The user's crystal-dragon idea as a whole is not possible: the crystal's
 shake is its own moby's animation, and spawning that moby starts the rescue
 cutscene. Once one is chosen, the bench's extra options and key can go.
 
-### M8. Flight levels: a crash sits that player out: BUILT (v0.10.0), awaiting play
+### M8. Flight levels: a crash sits that player out: BUILT (v0.10.1), awaiting play
 
 User request 2026-09-13: flight levels have no respawns, and one crash ended
 the run for everyone. Found in the executable: a flight crash never reaches
@@ -117,6 +117,19 @@ Checked headless in Sunny Flight: with player 2 still flying, player 1's crash
 sat him out and the camera moved to player 2; with both crashed, the results
 ran as retail. Not seen yet: a whole run finished by the remaining players,
 or three or four players.
+
+The user's first play of v0.10.0 found two bugs, both fixed in v0.10.1:
+
+- **After "Try again" player 2 was hidden and frozen.** Who sat out was never
+  forgotten on the retry's reseed, since the level does not change. Every
+  seed now clears it.
+- **Player 2 hovered over the water and could not crash.** He had left the
+  previous flight mid-crash with health -1, and the mod carried that home and
+  back in. Water only harms a dragon with health 0 or more, so he landed on
+  the surface. Retail keeps nothing from a flight level (it saves health on
+  entry and restores it after), and the shadows now do the same. A negative
+  health is also never carried. Reproduced headless before the fix: forcing
+  player 2 to -1 in Sunny Flight stopped him at z 2423, as in the user's log.
 
 ### M5. In-game Multiplayer and Color menus: stages 1 to 3 BUILT; stage 4 blocked on the engine
 

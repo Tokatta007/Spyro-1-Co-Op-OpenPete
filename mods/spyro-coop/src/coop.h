@@ -186,6 +186,7 @@ typedef struct {
     int32_t    health_carry[COOP_MAX_PLAYERS][2]; /* per slot: pending, health */
     int32_t    flight_out[COOP_MAX_PLAYERS];      /* per PLAYER: crashed, sitting out */
     uint32_t   flight_end_real;                   /* this flight level's Flight1 */
+    int32_t    health_before_flight[COOP_MAX_PLAYERS]; /* per slot: restored on leaving one */
 } CoopPartyArena;
 
 /* ------------------------------------------------------------------------

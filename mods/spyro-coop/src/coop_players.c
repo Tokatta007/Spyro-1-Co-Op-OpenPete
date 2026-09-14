@@ -287,16 +287,28 @@ void coop_resample_teleport(void) {
    everyone full health, and a separate respawn never reseeds.
 
    `live_slot` is the shadow whose state is live (a handover), or 0. */
+/* FLIGHT LEVELS KEEP NOTHING (retail, loaders.c). Loading any other level
+   saves Spyro's health in D_8007580C and every load restores it, so what
+   happens in a flight level stays there: a crash does not follow him home.
+   The shadows do the same with health_before_flight. Without it a dragon who
+   left a flight level mid-crash (health -1) carried that home and back into
+   the next flight, where water only harms a dragon with health >= 0: he
+   landed on the surface and hovered there, unable to crash (seen by the user,
+   v0.10.0, and reproduced headless). */
+static int is_flight_level(int32_t id) { return id % 10 == 5; }
+
 static void carry_health(CoopArena* A, int live_slot) {
     CoopPartyArena* P = coop_party_arena();
     int n = coop_seeded_shadows();
+    int leaving_flight = is_flight_level(A->last_level);
     for (int k = 1; k <= n; k++) {
         P->health_carry[k][0] = 1;
         P->health_carry[k][1] = (k == live_slot)
             ? *guest32(OP_GADDR_g_Spyro + SPYRO_OFF_HEALTH)
             : *(int32_t*)(coop_shadow(k).spyro + SPYRO_OFF_HEALTH);
+        if (leaving_flight)
+            P->health_carry[k][1] = P->health_before_flight[k];
     }
-    (void)A;
 }
 
 static void forget_health(void) {
@@ -313,10 +325,13 @@ static void seed_shadows(CoopArena* A) {
     for (int k = 1; k <= n; k++) {
         CoopShadowView v = coop_shadow(k);
         walk(k_spyro_regions, COUNT(k_spyro_regions), v.spyro, 0);
-        if (P->health_carry[k][0]) {
-            *(int32_t*)(v.spyro + SPYRO_OFF_HEALTH) = P->health_carry[k][1];
-            P->health_carry[k][0] = 0;
-        }
+        int32_t* health = (int32_t*)(v.spyro + SPYRO_OFF_HEALTH);
+        /* A dragon never arrives dead: a negative carry keeps slot 0's copy. */
+        if (P->health_carry[k][0] && P->health_carry[k][1] >= 0)
+            *health = P->health_carry[k][1];
+        P->health_carry[k][0] = 0;
+        if (is_flight_level(level_id()) && A->last_level != level_id())
+            P->health_before_flight[k] = *health;   /* entering, not a retry */
         memcpy(v.camera, guest8(OP_GADDR_g_Camera), CAMERA_STRUCT_BYTES);
         for (unsigned i = 0; i < CAMERA_EXTRA_COUNT; i++)
             v.camera_extra[i] = *guest32(k_camera_extra[i]);  /* or garbage */
@@ -335,6 +350,12 @@ static void seed_shadows(CoopArena* A) {
     P->shadows    = n;
     A->ready      = 1;
     reset_persons();                         /* every shadow is a fresh copy of slot 0 */
+
+    /* A flight level's "Try again" reloads without leaving the level, so
+       nothing else forgets who sat out: without this the crashed dragon came
+       back frozen and hidden (seen by the user, v0.10.0). Every dragon is a
+       fresh copy now, so every dragon flies again. */
+    memset(P->flight_out, 0, sizeof P->flight_out);
 
     /* Swap each in and move the live position, rather than hunting for the
        right bytes in the packed shadow. */
