@@ -100,7 +100,10 @@ star, at height -300. Seen in the native renderer headless
 
 The user's crystal-dragon idea as a whole is not possible: the crystal's
 shake is its own moby's animation, and spawning that moby starts the rescue
-cutscene. Once one is chosen, the bench's extra options and key can go.
+cutscene.
+
+**v0.11.0:** the mix is final. The bench is gone: no O key, no layer boxes or
+height slider; a respawn always plays every layer at -300.
 
 ### M8. Flight levels: a crash sits that player out: BUILT (v0.10.3), awaiting play
 
@@ -366,6 +369,17 @@ the native renderer's choice.
 For the author note: two Spyro model draws in one frame are not depth-ordered
 by the native renderer the way PsyCross orders them.
 
-### X2. Player 2 copies player 1's controls
+### X2. Extra players' controls: one controller for players 2-4 (v0.11.0), awaiting test
 
-Until OpenPete fills the second controller buffer (`docs/PORTING.md`, B1).
+OpenPete still never fills the game's second pad buffer (`docs/PORTING.md`,
+B1), but a mod can read a host gamepad through its own bindings. Players 2 to
+4 now read the controller bound in mod.toml (`extra_*`, default "pad:" =
+the first controller) and get a pad record built like the game's own
+(`coop_players.c`, CONTROLS); "Players 2-4 controls" in the M panel switches
+back to copying player 1. For the user's test, player 1 is keyboard-only
+(openpete.toml's game pad keys no longer list "pad:" buttons) and all three
+extra dragons share the PS5 controller. Checked headless: with "Controller"
+and no device, player 1 walks and the others stand; with "Copy" they follow.
+Not yet seen with a real controller, including whether the left stick
+bindings ("pad:-lefty" and so on) read as held. Separate controllers per
+player would need "pad2:" to "pad4:" bindings per player.

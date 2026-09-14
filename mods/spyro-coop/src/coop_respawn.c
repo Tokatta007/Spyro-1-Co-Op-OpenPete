@@ -328,7 +328,7 @@ static void on_trigger_respawn(CPUState* cpu) {
 
     *guest32(OP_GADDR_g_Spyro + SPYRO_OFF_INVULN) = RESPAWN_INVULN;
     *guest32(OP_GADDR_g_Spyro + SPYRO_OFF_RESPAWN_BLINK) = RESPAWN_BLINK;
-    coop_effect_play(cpu, g_settings.respawn_effects, coop_physical_player(dying));
+    coop_effect_play(cpu, FX_DEFAULT_LAYERS, coop_physical_player(dying));
 
     load_regs(cpu, &regs);
     g_stats.individual_respawns++;

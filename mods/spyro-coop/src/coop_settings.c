@@ -45,8 +45,7 @@ static void set_defaults(CoopSettings* s) {
     s->split_vertical = 1;
     for (int i = 0; i < COOP_MAX_PLAYERS; i++)
         memcpy(s->color[i], k_default_color, 4);
-    s->respawn_effects = FX_DEFAULT_LAYERS;
-    s->effect_height   = FX_HEIGHT_DEFAULT;
+    s->extra_controls = EXTRA_CONTROLS_CONTROLLER;
     s->draw_p2        = 1;
     s->hysteresis     = 25;
 }
@@ -56,9 +55,8 @@ static void clamp(CoopSettings* s) {
     s->respawn_modern = s->respawn_modern ? 1 : 0;
     s->split_vertical = s->split_vertical ? 1 : 0;
     s->draw_p2        = s->draw_p2 ? 1 : 0;
-    s->respawn_effects &= (1 << FX_LAYER_COUNT) - 1;
-    if (s->effect_height < FX_HEIGHT_MIN) s->effect_height = FX_HEIGHT_MIN;
-    if (s->effect_height > FX_HEIGHT_MAX) s->effect_height = FX_HEIGHT_MAX;
+    if (s->extra_controls < 0 || s->extra_controls >= EXTRA_CONTROLS_COUNT)
+        s->extra_controls = EXTRA_CONTROLS_CONTROLLER;
     if (s->hysteresis < 0)  s->hysteresis = 0;
     if (s->hysteresis > 50) s->hysteresis = 50;
 }
@@ -89,8 +87,8 @@ void coop_settings_save(void) {
     for (int i = 0; i < COOP_MAX_PLAYERS; i++)
         fprintf(f, "p%d_color = %d %d %d %d\n", i + 1,
                 s->color[i][0], s->color[i][1], s->color[i][2], s->color[i][3]);
-    fprintf(f, "respawn_effects = %d\n", s->respawn_effects);
-    fprintf(f, "effect_height = %d\n", s->effect_height);
+    fprintf(f, "extra_controls = %s\n",
+            s->extra_controls == EXTRA_CONTROLS_COPY ? "copy" : "controller");
     fprintf(f, "draw_p2 = %d\n", s->draw_p2);
     fprintf(f, "enemy_switch_margin = %d\n", s->hysteresis);
     fclose(f);
@@ -119,10 +117,9 @@ void coop_settings_load(void) {
                 if (sscanf(val, "%d %d %d %d", &c[0], &c[1], &c[2], &c[3]) == 4)
                     for (int k = 0; k < 4; k++)
                         s->color[i][k] = (uint8_t)(c[k] < 0 ? 0 : c[k] > 255 ? 255 : c[k]);
-            } else if (!strcmp(key, "respawn_effects"))
-                s->respawn_effects = atoi(val);
-            else if (!strcmp(key, "effect_height"))
-                s->effect_height = atoi(val);
+            } else if (!strcmp(key, "extra_controls"))
+                s->extra_controls = strncmp(val, "copy", 4) == 0 ? EXTRA_CONTROLS_COPY
+                                                                  : EXTRA_CONTROLS_CONTROLLER;
             else if (!strcmp(key, "draw_p2"))
                 s->draw_p2 = atoi(val);
             else if (!strcmp(key, "enemy_switch_margin"))
@@ -196,8 +193,16 @@ static void settings_panel(const openpete_mod_ui_t* ui) {
 
     int idx = g_ui_copy.players - 1;
     if (ui->combo("Players", &idx, players, COOP_MAX_PLAYERS)) { g_ui_copy.players = idx + 1; changed = 1; }
-    ui->tooltip("How many dragons. Extra players join beside player 1 and, until OpenPete "
-                "feeds more controllers, copy player 1's input.");
+    ui->tooltip("How many dragons. Extra players join beside player 1.");
+
+    static const char* const controls[] = { "Copy player 1", "Controller" };
+    idx = g_ui_copy.extra_controls;
+    if (ui->combo("Players 2-4 controls", &idx, controls, EXTRA_CONTROLS_COUNT)) {
+        g_ui_copy.extra_controls = idx; changed = 1;
+    }
+    ui->tooltip("Controller: players 2 to 4 follow this mod's gamepad bindings. For "
+                "player 1 on the keyboard alone, remove the \"pad:\" entries from the "
+                "game's own pad keys. Copy player 1: every dragon follows player 1.");
 
     idx = g_ui_copy.respawn_modern;
     if (ui->combo("Respawn", &idx, respawn, 2)) { g_ui_copy.respawn_modern = idx; changed = 1; }
@@ -213,20 +218,6 @@ static void settings_panel(const openpete_mod_ui_t* ui) {
     ui->text("Colours (strength 0 leaves Spyro's own colour)");
     for (int p = 0; p < COOP_MAX_PLAYERS; p++)
         color_rows(ui, p, &changed);
-
-    ui->separator();
-    ui->text("Respawn effects (press O in a level to try them)");
-    for (int l = 0; l < FX_LAYER_COUNT; l++) {
-        int on = (g_ui_copy.respawn_effects >> l) & 1;
-        if (ui->checkbox(k_fx_layer_names[l], &on)) {
-            g_ui_copy.respawn_effects = (g_ui_copy.respawn_effects & ~(1 << l)) | (on << l);
-            changed = 1;
-        }
-    }
-    if (ui->slider_int("Effect height", &g_ui_copy.effect_height, FX_HEIGHT_MIN, FX_HEIGHT_MAX))
-        changed = 1;
-    ui->tooltip("How high the effects start, from Spyro's position. Lower is nearer his "
-                "feet. The dust ring is always on the ground.");
 
     ui->separator();
     ui->text_disabled("Development");

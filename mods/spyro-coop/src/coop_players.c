@@ -636,6 +636,107 @@ static void maybe_swap_view(CoopArena* A) {
 }
 
 /* ------------------------------------------------------------------------
+ * CONTROLS (2026-09-13). OpenPete gives the game one controller: Spyro 1
+ * reads only port 1, and the second pad buffer stays empty (coop_pad.c). So
+ * players 2 to 4 are read by the mod itself, through the gamepad bindings
+ * declared in mod.toml (rebindable in openpete.toml under
+ * [keys.mod.spyro-coop]; "pad2:south" names a second controller), and turned
+ * into the game's own pad record here, the way PadVSync builds player 1's.
+ * For the user's setup player 1 is on the keyboard alone and the controller
+ * drives the others; a "pad:" button left in player 1's game bindings moves
+ * both.
+ *
+ * The record starts as player 1's (controller type, calibration) with every
+ * input replaced: held from the bindings, down and released as edges against
+ * last tick's held (kept in the arena, so rewind agrees), the sticks centred.
+ * As in the game, the left stick stands in for the d-pad when the d-pad is
+ * idle. Every buffered frame holds the same buttons; only the first carries
+ * the edges, so a press lands once however many substeps run.
+ *
+ * "Copy player 1" gives every extra dragon player 1's input, as before; the
+ * headless tests need it.
+ *
+ * Slot 0 always reads the game's pad, so after the dev view key the keyboard
+ * drives whichever dragon the camera is on.
+ * ---------------------------------------------------------------------- */
+#define PADREC_DOWN        0x00
+#define PADREC_RELEASED    0x04
+#define PADREC_HELD        0x08
+#define PADREC_STICK_MOVED 0x10
+#define PADREC_STICKS      0x14
+#define PADREC_NO_BUTTONS  0x18
+#define PADREC_NO_MOVEMENT 0x1C
+#define PADREC_BUFFERED    0x44   /* 4 x {type, held, down, released, stick moved, sticks} */
+#define PADREC_BUF_SIZE    0x18
+
+#define PADB_L2       0x0001u
+#define PADB_R2       0x0002u
+#define PADB_L1       0x0004u
+#define PADB_R1       0x0008u
+#define PADB_TRIANGLE 0x0010u
+#define PADB_CIRCLE   0x0020u
+#define PADB_CROSS    0x0040u
+#define PADB_SQUARE   0x0080u
+#define PADB_UP       0x1000u
+#define PADB_RIGHT    0x2000u
+#define PADB_DOWN     0x4000u
+#define PADB_LEFT     0x8000u
+#define PADB_DPAD     (PADB_UP | PADB_RIGHT | PADB_DOWN | PADB_LEFT)
+
+typedef struct { const char* binding; uint32_t bit; } PadBinding;
+
+static const PadBinding k_extra_buttons[] = {
+    { "extra_cross",    PADB_CROSS },    { "extra_circle",   PADB_CIRCLE },
+    { "extra_square",   PADB_SQUARE },   { "extra_triangle", PADB_TRIANGLE },
+    { "extra_l1",       PADB_L1 },       { "extra_r1",       PADB_R1 },
+    { "extra_l2",       PADB_L2 },       { "extra_r2",       PADB_R2 },
+    { "extra_up",       PADB_UP },       { "extra_down",     PADB_DOWN },
+    { "extra_left",     PADB_LEFT },     { "extra_right",    PADB_RIGHT },
+};
+static const PadBinding k_extra_stick[] = {
+    { "extra_stick_up",   PADB_UP },     { "extra_stick_down",  PADB_DOWN },
+    { "extra_stick_left", PADB_LEFT },   { "extra_stick_right", PADB_RIGHT },
+};
+
+static void put32(uint8_t* rec, unsigned off, uint32_t v) { memcpy(rec + off, &v, 4); }
+
+static void build_extra_pad(uint8_t* out, const uint8_t* p1_pad) {
+    memcpy(out, p1_pad, 0xA4);
+    if (g_settings.extra_controls != EXTRA_CONTROLS_CONTROLLER)
+        return;                                         /* copy player 1 */
+
+    uint32_t held = 0;
+    for (unsigned i = 0; i < COUNT(k_extra_buttons); i++)
+        if (g_api->binding_down(g_self, k_extra_buttons[i].binding))
+            held |= k_extra_buttons[i].bit;
+    if (!(held & PADB_DPAD))
+        for (unsigned i = 0; i < COUNT(k_extra_stick); i++)
+            if (g_api->binding_down(g_self, k_extra_stick[i].binding))
+                held |= k_extra_stick[i].bit;
+
+    CoopPartyArena* P = coop_party_arena();
+    uint32_t down     = held & ~P->controller_held;
+    uint32_t released = P->controller_held & ~held;
+    P->controller_held = held;
+
+    put32(out, PADREC_HELD, held);
+    put32(out, PADREC_DOWN, down);
+    put32(out, PADREC_RELEASED, released);
+    put32(out, PADREC_STICK_MOVED, 0);
+    put32(out, PADREC_STICKS, 0x7F7F7F7Fu);
+    put32(out, PADREC_NO_BUTTONS, held ? 0 : 1);
+    put32(out, PADREC_NO_MOVEMENT, (held & PADB_DPAD) ? 0 : 1);
+    for (unsigned f = 0; f < 4; f++) {
+        unsigned b = PADREC_BUFFERED + f * PADREC_BUF_SIZE;
+        put32(out, b + 0x04, held);
+        put32(out, b + 0x08, f == 0 ? down : 0);
+        put32(out, b + 0x0C, f == 0 ? released : 0);
+        put32(out, b + 0x10, 0);
+        put32(out, b + 0x14, 0x7F7F7F7Fu);
+    }
+}
+
+/* ------------------------------------------------------------------------
  * Override: Spyro's tick. Ported from Sp1x2TickPlayer2Spyro.
  * ---------------------------------------------------------------------- */
 static void on_spyro_tick(CPUState* cpu) {
@@ -656,7 +757,6 @@ static void on_spyro_tick(CPUState* cpu) {
         if (A->ready)
             coop_players_disable();
         g_api->base(cpu);
-        coop_effects_tick(cpu);              /* the test bench works solo too */
         return;
     }
 
@@ -677,6 +777,8 @@ static void on_spyro_tick(CPUState* cpu) {
     uint32_t p1_active_pad;
     memcpy(p1_pad, guest8(OP_GADDR_g_Pad), sizeof p1_pad);
     p1_active_pad = *(uint32_t*)g_api->guest(OP_GADDR_g_ActivePad);
+    uint8_t extra_pad[0xA4];
+    build_extra_pad(extra_pad, p1_pad);
 
     SavedRegs regs;
     save_regs(cpu, &regs);
@@ -738,11 +840,10 @@ static void on_spyro_tick(CPUState* cpu) {
         if (coop_flight_slot_out(k))
             continue;                                  /* crashed: sits out, frozen */
 
-        /* PHASE A INPUT: hand each shadow exactly what slot 0 saw. g_PadBackup
-           and the swap flag stay his own. When real controllers arrive, this
-           is all that changes. */
+        /* INPUT: the extra players' pad (see CONTROLS). g_PadBackup and the
+           swap flag stay his own. */
         CoopShadowView v = coop_shadow(k);
-        memcpy(v.pad + PAD_SHADOW_PAD, p1_pad, sizeof p1_pad);
+        memcpy(v.pad + PAD_SHADOW_PAD, extra_pad, sizeof extra_pad);
         memcpy(v.pad + PAD_SHADOW_ACTIVEPAD, &p1_active_pad, 4);
 
         swap_all(A, k);

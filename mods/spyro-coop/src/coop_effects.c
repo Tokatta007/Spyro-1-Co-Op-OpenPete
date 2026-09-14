@@ -1,13 +1,11 @@
 /**
  * @file coop_effects.c
- * @brief Respawn effects, and a test bench to choose one (2026-09-13).
+ * @brief Respawn effects (2026-09-13).
  *
- * THE BENCH. The user wanted to try several arrival effects before settling.
- * Each is a layer, and any combination plays together: the M panel has a box
- * per layer and an "Effect height" slider, and the test key (O by default)
- * plays the current mix on the camera's dragon, so it can be tuned without
- * dying. The user's choice (2026-09-13) is the default: the crystal burst
- * with orange and white sparks and the dust ring, lowered toward the body.
+ * A respawn plays every layer here together: the crystal burst, orange and
+ * white sparks, the dust ring, a smoke puff and the rescue star. The user
+ * chose that mix, and the height, on a test bench (a box per layer, a height
+ * slider and a key to play them) that was removed once they had.
  *
  * EVERY EFFECT IS THE GAME'S OWN, found in the decompilation:
  *   - particles, through the level's particle spawner, whose address the
@@ -47,15 +45,6 @@ static uint32_t g_fx_vaddr;
 
 static CoopFxArena* FX(void) { return (CoopFxArena*)g_api->guest(g_fx_vaddr); }
 
-const char* const k_fx_layer_names[FX_LAYER_COUNT] = {
-    "Crystal burst (in levels with dragons)",
-    "Orange sparks",
-    "White sparks",
-    "Dust ring",
-    "Smoke puff",
-    "Rescue star",
-};
-
 /* ------------------------------------------------------------------------
  * Calling the game
  * ---------------------------------------------------------------------- */
@@ -85,9 +74,9 @@ static uint32_t here(int32_t lift) {
 /* HEIGHT. Spyro's position sits well above his feet (a respawn stands him 356
    units over the floor), and effects started there, or above it, looked as if
    they came out of the top of his head (the user, 2026-09-13). Every effect
-   but the dust ring, which is built on the ground, starts at the "Effect
-   height" setting relative to that position. */
-static int32_t lift(void) { return g_settings.effect_height; }
+   but the dust ring, which is built on the ground, starts FX_HEIGHT from
+   that position. */
+static int32_t lift(void) { return FX_HEIGHT; }
 
 static void smoke(CPUState* cpu)         { particle(cpu, 5, 2, here(lift()), 0); }
 static void white_sparks(CPUState* cpu)  { particle(cpu, 14, 71, here(lift()), 0); }
@@ -239,21 +228,10 @@ void coop_effect_play(CPUState* cpu, int layers, int person) {
     g_stats.effects_played++;
 }
 
-/* The test key: play the chosen effect on the camera's dragon. Called from
-   the tick with every dragon swapped back, so slot 0 is live. The key's last
-   state lives in the arena so rewind cannot repeat or miss a press. */
+/* Once per gameplay tick: the rescue star's clock. */
 void coop_effects_tick(CPUState* cpu) {
-    CoopFxArena* F = FX();
-    uint32_t down = g_api->binding_down(g_self, "test_respawn_effect") ? 1u : 0u;
-    int pressed = down && !F->test_key_down;
-    F->test_key_down = down;
+    (void)cpu;
     star_advance();
-    if (!pressed)
-        return;
-    coop_effect_play(cpu, g_settings.respawn_effects, coop_physical_player(0));
-    *guest32(OP_GADDR_g_Spyro + SPYRO_OFF_RESPAWN_BLINK) = COOP_RESPAWN_BLINK_TICKS;   /* with the blink, as a respawn */
-    coop_log(OP_MOD_LOG_INFO, "test respawn effects: layers 0x%02X, height %d",
-             g_settings.respawn_effects, g_settings.effect_height);
 }
 
 void coop_effects_init(uint32_t fx_vaddr) {

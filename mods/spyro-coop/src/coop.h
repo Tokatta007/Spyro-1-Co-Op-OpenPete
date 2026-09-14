@@ -190,16 +190,17 @@ typedef struct {
     int32_t    portal_pin;     /* slot + 1 of the dragon who touched a portal, 0 = none */
     int32_t    stray_ticks[COOP_MAX_PLAYERS];     /* per slot: exit glide after slot 0 landed */
     int32_t    results_pending; /* flight results shown: reseed when play resumes */
+    uint32_t   controller_held; /* the extra players' controller, last tick's buttons */
 } CoopPartyArena;
 
 /* ------------------------------------------------------------------------
  * A seventh allocation, appended for the ledger reason above: scratch for the
  * respawn effects (coop_effects.c), whose particle and moby calls read vectors
- * and a stand-in Moby by pointer, and the test key's last state.
+ * and a stand-in Moby by pointer.
  * ---------------------------------------------------------------------- */
 typedef struct {
     uint8_t  scratch[16 + 0x58];
-    uint32_t test_key_down;
+    uint32_t unused_test_key; /* the retired O test key's; kept for the layout */
     int32_t  star_tick;       /* 0 idle, else ticks since the rescue star started */
     int32_t  star_pos[3];
     uint32_t star_drawn_tick; /* the tick it was last drawn in */
@@ -215,15 +216,13 @@ enum {
     FX_STAR,
     FX_LAYER_COUNT
 };
-/* The user's pick, 2026-09-13: everything but the colour flash, which is gone,
-   plus the rescue star, at -300. */
+/* The user's pick, 2026-09-13, chosen on a test bench since retired: every
+   layer, the rescue star included, starting 300 below Spyro's position. */
 #define FX_DEFAULT_LAYERS ((1 << FX_CRYSTAL) | (1 << FX_ORANGE_SPARKS) | \
                            (1 << FX_WHITE_SPARKS) | (1 << FX_DUST_RING) | \
                            (1 << FX_SMOKE) | (1 << FX_STAR))
-#define FX_HEIGHT_DEFAULT (-300)  /* world units from Spyro's position, which sits
-                                     well above his feet; the dust ring ignores it */
-#define FX_HEIGHT_MIN     (-400)
-#define FX_HEIGHT_MAX     200
+#define FX_HEIGHT (-300)  /* world units from Spyro's position, which sits well
+                             above his feet; the dust ring ignores it */
 
 /* One shadow slot's buffers, wherever they live. */
 typedef struct {
@@ -280,11 +279,13 @@ typedef struct {
     int     respawn_modern;  /* 1 modern, 0 original */
     int     split_vertical;  /* 1 vertical, 0 horizontal; no effect until split-screen exists */
     uint8_t color[COOP_MAX_PLAYERS][4]; /* per player: red, green, blue, strength */
-    int     respawn_effects; /* bit per FX_* layer */
-    int     effect_height;   /* FX_HEIGHT_MIN..MAX */
+    int     extra_controls;  /* EXTRA_CONTROLS_* */
     int     draw_p2;         /* development */
     int     hysteresis;      /* development: enemy switch margin, percent */
 } CoopSettings;
+
+/* Where players 2 to 4 get their input (coop_players.c, CONTROLS). */
+enum { EXTRA_CONTROLS_COPY, EXTRA_CONTROLS_CONTROLLER, EXTRA_CONTROLS_COUNT };
 
 extern CoopSettings g_settings;
 void coop_settings_load(void);
@@ -346,10 +347,9 @@ int  coop_menu_install(uint32_t menu_vaddr);
 int  coop_menu_drawing_preview(void);  /* the Colors page is drawing a preview dragon */
 
 /* coop_effects.c */
-extern const char* const k_fx_layer_names[FX_LAYER_COUNT];
 void coop_effects_init(uint32_t fx_vaddr);
 void coop_effect_play(CPUState* cpu, int layers, int person);
-void coop_effects_tick(CPUState* cpu);   /* the test key, and the star's clock */
+void coop_effects_tick(CPUState* cpu);   /* the rescue star's clock */
 void coop_effects_draw(CPUState* cpu);   /* the star, from the scene composer's end */
 
 /* coop_flight.c */
