@@ -1,6 +1,6 @@
 /**
  * @file coop_draw.c
- * @brief Drawing player 2, the portal wingman, and both dragons' colours.
+ * @brief Drawing player 2, the portal wingman, and both dragons' colors.
  *
  * THE PS1 WAY, ported unchanged in idea. Spyro is not a moby, so there is
  * nothing to spawn. Swap player 2's Spyro state into the same globals, call
@@ -28,9 +28,9 @@
 #define FLAME_OFF_ACTIVE 0x98  /* g_SpyroFlame.m_IsFlameActive, one byte */
 
 /* ------------------------------------------------------------------------
- * PER-PLAYER COLOUR. Written into g_Spyro.m_colorFilter, the game's own tint,
+ * PER-PLAYER COLOR. Written into g_Spyro.m_colorFilter, the game's own tint,
  * immediately before each dragon's model is drawn: the model renderer's
- * override does it for every call, so the colour is right in gameplay, in
+ * override does it for every call, so the color is right in gameplay, in
  * every sequence, and for the portal wingman, without depending on when the
  * tick last ran (pete.c clears the field on state changes).
  *
@@ -40,7 +40,7 @@
  * ---------------------------------------------------------------------- */
 static uint8_t g_tint_written[COOP_MAX_PLAYERS];  /* last strength written per slot */
 
-/* `slot` is 0 for the live dragon, 1..3 for a shadow; the colour is the
+/* `slot` is 0 for the live dragon, 1..3 for a shadow; the color is the
    person's, looked up through coop_physical_player. */
 static void apply_tint(int slot) {
     const uint8_t* c = g_settings.color[coop_physical_player(slot)];
@@ -53,12 +53,12 @@ static void apply_tint(int slot) {
 
 /* ------------------------------------------------------------------------
  * DRAW ORDER MATTERS ON OPENPETE (measured 2026-09-13). OpenPete rebuilds
- * Spyro natively, and it takes ONE colour per call of the model renderer: the
- * colour of the last dragon drawn inside that call. Its in-between frames
- * show one dragon, coloured like the last Spyro draw of the frame. The portal
+ * Spyro natively, and it takes ONE color per call of the model renderer: the
+ * color of the last dragon drawn inside that call. Its in-between frames
+ * show one dragon, colored like the last Spyro draw of the frame. The portal
  * diagnostic showed the retail renderer giving the lead red and the wingman
  * green in one call, and the user saw two green dragons; with player 2 drawn
- * after player 1, the camera's dragon showed player 2's colour until
+ * after player 1, the camera's dragon showed player 2's color until
  * interpolation was switched off.
  *
  * So: every extra dragon is its own call of the renderer, and it is drawn
@@ -154,7 +154,7 @@ static void draw_player2(CPUState* cpu) {
 /* func_80058BA8 (glows and sparkles), the composer's last call: the fallback
    for a scene where player 1 was hidden, so the composer never called the
    model renderer and player 2 was not drawn ahead of him. */
-/* Keep both dragons' colour in game state, every frame, in every gamestate.
+/* Keep both dragons' color in game state, every frame, in every gamestate.
    Writing it only immediately before each draw was not enough: during a
    dragon's dialogue the game keeps clearing the filter (ChangeSpyroState
    zeroes its strength byte), and the native rebuild evidently reads it from
@@ -211,7 +211,7 @@ int coop_draw_install(void) {
  *
  * The wingman is his own call of the renderer, drawn before the lead: see
  * DRAW ORDER MATTERS above. (Calling base() twice inside one call was tried
- * first: both dragons took the second one's colour, and the wingman did not
+ * first: both dragons took the second one's color, and the wingman did not
  * survive interpolation either.) For the overlap in the transition, see
  * OVERLAP IN THE TRANSITION below.
  *
@@ -234,11 +234,11 @@ int coop_draw_install(void) {
  *
  * Tried and rejected by the user, so not to be retried as a fix: placement
  * square to the view (v0.5.3), a trailing stagger (v0.5.4), lead drawn first
- * (v0.5.5, also gave both dragons one colour), and a drop below the lead as
+ * (v0.5.5, also gave both dragons one color), and a drop below the lead as
  * the camera swings side-on (v0.5.6, clear on screen but looked wrong when
  * the pair landed). The formation stays on the wing line, level. */
 
-/* One wingman draw at wing_pos in his player's colour, as his own call, with
+/* One wingman draw at wing_pos in his player's color, as his own call, with
    position, flame matrix and filter put back exactly afterwards. */
 static void draw_wingman(CPUState* cpu, int slot, int32_t* pos, int32_t* mtx, uint8_t* filter,
                          const int32_t wing_pos[3]) {
@@ -267,7 +267,7 @@ static void draw_wingman(CPUState* cpu, int slot, int32_t* pos, int32_t* mtx, ui
 
 static void on_spyro_model(CPUState* cpu) {
     if (g_in_extra_draw || coop_menu_drawing_preview()) {
-        g_api->base(cpu);                    /* a call we made: colour already set */
+        g_api->base(cpu);                    /* a call we made: color already set */
         return;
     }
     apply_tint(0);
@@ -278,7 +278,7 @@ static void on_spyro_model(CPUState* cpu) {
             g_last_extra_tick = tick_id();
             draw_player2(cpu);
             g_p2_drawn_this_scene = 1;
-            apply_tint(0);                   /* the lead's colour, for his call */
+            apply_tint(0);                   /* the lead's color, for his call */
         }
         if (!coop_respawn_blink_hidden())
             g_api->base(cpu);                /* player 1, last; left out on a blink's off tick */

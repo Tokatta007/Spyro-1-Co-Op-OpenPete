@@ -27,7 +27,7 @@ extern openpete_mod_t*           g_self;
  * Call sites. OpenPete runs the retail executable, so these are the retail
  * addresses, read straight out of SCUS_942.28 (docs/PORT-INVENTORY.md §1).
  * An override catches EVERY call to a function; these tell the gameplay call
- * apart from the cutscene and menu callers, which must get stock behaviour.
+ * apart from the cutscene and menu callers, which must get stock behavior.
  * ---------------------------------------------------------------------- */
 #define RA_GAMEPLAY_SPYRO_TICK 0x80033AE0u  /* jal func_8004A200 at 0x80033AD8 */
 #define RA_GAMEPLAY_CAMERA     0x80033B54u  /* jal CameraUpdate  at 0x80033B4C */
@@ -49,7 +49,7 @@ extern openpete_mod_t*           g_self;
                                          g_Camera.m_Focus unchecked */
 #define SPYRO_OFF_HEALTH       0x164  /* int m_health: 3 green ... 0 no Sparx */
 #define SPYRO_OFF_COLOR_FILTER 0x028  /* r, g, b, interpolation: the game's own
-                                         tint, interpolated with vertex colours */
+                                         tint, interpolated with vertex colors */
 #define SPYRO_OFF_RESPAWN_BLINK 0x260 /* decomp's unk_0x260, "No XREFS": nothing in
                                          the game touches it, so the mod keeps a
                                          respawned dragon's blink ticks here, where
@@ -340,7 +340,7 @@ void coop_sparx_heal(CPUState* cpu);
 
 /* coop_draw.c */
 int  coop_draw_install(void);  /* gameplay draw and portal fly-in */
-void coop_tint_state(void);    /* keep both dragons' colour in game state */
+void coop_tint_state(void);    /* keep both dragons' color in game state */
 
 /* coop_menu.c */
 int  coop_menu_install(uint32_t menu_vaddr);
@@ -351,6 +351,11 @@ void coop_effects_init(uint32_t fx_vaddr);
 void coop_effect_play(CPUState* cpu, int layers, int person);
 void coop_effects_tick(CPUState* cpu);   /* the rescue star's clock */
 void coop_effects_draw(CPUState* cpu);   /* the star, from the scene composer's end */
+
+/* coop_controls.c */
+void     coop_controls_sample(void);   /* present thread, every present */
+uint32_t coop_controls_held(void);     /* tick: the extra players' PS1 buttons */
+void     coop_controls_status(void);
 
 /* coop_flight.c */
 int  coop_flight_install(void);

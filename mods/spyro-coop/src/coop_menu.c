@@ -20,7 +20,7 @@
  *     rewritten at those call sites, which grows the small box by a row, or
  *     resizes it for one of our pages;
  *   - the big title, func_80017FE4 ("PAUSED"), reads MULTIPLAYER on that page
- *     and is left out on the Colors page, where the colour swatches take its row;
+ *     and is left out on the Colors page, where the color swatches take its row;
  *   - the text builder, func_800181AC, is called for each pause-list row. At
  *     the last row we draw MULTIPLAYER and the last row one line lower; while a
  *     page is open the stock rows are skipped and the page is drawn there.
@@ -45,7 +45,7 @@
 #define RA_ITEM_QUIT_FLY   0x8001B4F8u   /* "QUIT", flight levels */
 #define RA_ITEM_EXIT_LEVEL 0x8001B57Cu   /* "EXIT LEVEL", levels */
 #define RA_ITEM_QUIT_GAME  0x8001B5C8u   /* "QUIT GAME", homeworlds */
-#define RA_BOX_FILL_LINK   0x8001A868u   /* func_800168DC(fill quad), the box's grey fill */
+#define RA_BOX_FILL_LINK   0x8001A868u   /* func_800168DC(fill quad), the box's gray fill */
 #define RA_BOX_SEPARATOR   0x8001A888u   /* the short line under the title, (224,97)-(288,97) */
 #define RA_BOX_TOP         0x8001A904u   /* small box, (140,67)-(372,67) */
 #define RA_BOX_RIGHT       0x8001A92Cu   /* (372,67)-(372,bottom) */
@@ -71,7 +71,7 @@
 #define LIST_LAST_Y     182    /* ...and the last row moves down one */
 #define SMALL_BOTTOM    194    /* stock 176, plus one row of 18 */
 #define SHADE_NORMAL    11     /* every stock menu */
-#define SHADE_DISABLED  12     /* grey, verified on PS1 (pale purple in the native view) */
+#define SHADE_DISABLED  12     /* gray, verified on PS1 (pale purple in the native view) */
 #define LETTER_STRIDE   88     /* sizeof(Moby) */
 #define LETTER_ROT_Z    70     /* Moby.m_Rotation.z, one byte */
 #define SND_MOVE        45     /* sound table: menuCursor */
@@ -100,7 +100,7 @@ static const Box k_box_multiplayer = { 84, STOCK_TOP, 428, 188 };  /* the option
 static const Box k_box_colors      = { 36, 100, 476, 200 };
 
 static uint32_t g_menu_vaddr;
-static int      g_in_menu_call;    /* inside a call we made: stock behaviour */
+static int      g_in_menu_call;    /* inside a call we made: stock behavior */
 
 static CoopMenuArena* M(void) { return (CoopMenuArena*)g_api->guest(g_menu_vaddr); }
 
@@ -152,9 +152,9 @@ static Built text(CPUState* cpu, const char* s, int x, int y, int z, int advance
     return b;
 }
 
-/* How far the last letter's centre lies from the first's, by the builder's own
+/* How far the last letter's center lies from the first's, by the builder's own
    rules (func_800181AC, read from the disassembly): a letter's position is its
-   CENTRE; a space moves on three quarters of the spacing; and the first
+   CENTER; a space moves on three quarters of the spacing; and the first
    letter, a letter after a space or a digit, and ! or ? move on by the SIZE
    instead of the spacing. Centring on len * spacing, as before, put every line
    half a letter left and lines with spaces further still. */
@@ -174,7 +174,7 @@ static int text_span(const char* s, int advance, int size) {
     return last;
 }
 
-static Built text_centred(CPUState* cpu, const char* s, int cx, int y, int shade) {
+static Built text_centered(CPUState* cpu, const char* s, int cx, int y, int shade) {
     return text(cpu, s, cx - text_span(s, 15, 16) / 2, y, 0x1400, 15, 16, shade);
 }
 
@@ -264,7 +264,7 @@ static void multiplayer_adjust(CPUState* cpu, int delta) {
     chime(cpu, SND_PICK);
 }
 
-/* A column belongs to a player who is in the game. The others are drawn grey
+/* A column belongs to a player who is in the game. The others are drawn gray
    and the cursor steps over them. */
 static int color_cell_active(int cell) {
     return cell >= COLOR_DONE || cell / 4 < g_settings.players;
@@ -439,10 +439,10 @@ static int squeeze_x(int x) {
     return 256 + (int)((float)(x - 256) / k);
 }
 
-/* A flat quad showing what the tint does to him: Spyro's colour blended
+/* A flat quad showing what the tint does to him: Spyro's color blended
    toward the chosen one by the strength, the way the filter blends. The PS1
    build's answer to the preview dragons that never drew. A player who is not
-   in the game gets a darkened swatch, like his greyed column. */
+   in the game gets a darkened swatch, like his grayed column. */
 static void swatch(CPUState* cpu, int player, int cx) {
     const uint8_t* c = g_settings.color[player];
     uint32_t f4 = *(uint32_t*)g_api->guest(OP_GADDR_D_800757B0);   /* primitive cursor */
@@ -458,8 +458,8 @@ static void swatch(CPUState* cpu, int player, int cx) {
     /* THE QUAD IS SQUEEZED, THE FRAME IS NOT. In a wide window the native
        renderer places this quad as if the 512-wide screen were stretched over
        the whole window, while the frame's lines, the box and the text stay in
-       the centred 4:3 area (measured at 21:9, 2026-09-13: the quad's corners
-       landed at x * width / 512). So its corners are pulled toward the centre
+       the centered 4:3 area (measured at 21:9, 2026-09-13: the quad's corners
+       landed at x * width / 512). So its corners are pulled toward the center
        by that stretch, and it lands inside its frame at any window shape. */
     int qx0 = squeeze_x(x0), qx1 = squeeze_x(x1);
     memset(p, 0, 24);
@@ -489,16 +489,16 @@ static Built number(CPUState* cpu, int v, int cx, int y, int shade) {
     if (v >= 10)  s[i++] = (char)('0' + (v / 10) % 10);
     s[i++] = (char)('0' + v % 10);
     s[i] = 0;
-    return text_centred(cpu, s, cx, y, shade);
+    return text_centered(cpu, s, cx, y, shade);
 }
 
-/* Set while a preview dragon is drawn, so coop_draw.c keeps its colour. */
+/* Set while a preview dragon is drawn, so coop_draw.c keeps its color. */
 static int g_drawing_preview;
 int coop_menu_drawing_preview(void) { return g_drawing_preview; }
 
 #if COOP_PREVIEW_DRAGONS
 /* ------------------------------------------------------------------------
- * THE SPINNING DRAGONS (2026-09-13). Each column's player, in his colour,
+ * THE SPINNING DRAGONS (2026-09-13). Each column's player, in his color,
  * turning in the title row. SWITCHED OFF: see "WHY THEY ARE OFF" below.
  *
  * WHY THIS WORKS HERE AND NEVER DID ON PS1. The paused world is a stored
@@ -530,8 +530,8 @@ int coop_menu_drawing_preview(void) { return g_drawing_preview; }
  * BuildCameraViewMatrix is called first, as the Game Over screen does before
  * its own spinning Spyro. Everything borrowed from g_Spyro is put back.
  *
- * COLOUR. Each dragon's filter is written before its own call, and the co-op
- * draw hook (coop_draw.c), which stamps player 1's colour on every model draw
+ * COLOR. Each dragon's filter is written before its own call, and the co-op
+ * draw hook (coop_draw.c), which stamps player 1's color on every model draw
  * it did not start, is told to leave these alone: before it was, all four came
  * out player 1's green. Dragons drawn under the box's fill came out as dark
  * silhouettes, so the Colors box starts below them. They replace the flat
@@ -595,7 +595,7 @@ static void preview_dragons(CPUState* cpu, const int cols[], int count) {
             static const uint8_t dim[4] = { 0x10, 0x10, 0x14, 0xE8 };   /* not in the game */
             memcpy(filter, dim, 4);
         }
-        g_drawing_preview = 1;               /* the co-op draw hook leaves its colour alone */
+        g_drawing_preview = 1;               /* the co-op draw hook leaves its color alone */
         game_call(cpu, OP_FNADDR_func_80023AC4);
         g_drawing_preview = 0;
     }
@@ -619,7 +619,7 @@ static void draw_colors(CPUState* cpu) {
     Built sel = { 0, 0 };
     for (int p = 0; p < COOP_MAX_PLAYERS; p++) {
         int shade = (p < g_settings.players) ? SHADE_NORMAL : SHADE_DISABLED;
-        text_centred(cpu, heads[p], k_col_x[p], 112, shade);
+        text_centered(cpu, heads[p], k_col_x[p], 112, shade);
         for (int k = 0; k < 4; k++) {
             Built b = number(cpu, g_settings.color[p][k], k_col_x[p], y[k], shade);
             if (m->cursor == p * 4 + k)
@@ -707,7 +707,7 @@ static void on_text_sprites(CPUState* cpu) {
 }
 
 /* func_80017FE4, the big letters: PAUSED becomes the page's own title. */
-#define TITLE_X 117           /* MULTIPLAYER centred on the box: measured on screen, the
+#define TITLE_X 117           /* MULTIPLAYER centered on the box: measured on screen, the
                                  big letters run wider than PAUSED's x 186 suggests */
 
 static void on_title(CPUState* cpu) {

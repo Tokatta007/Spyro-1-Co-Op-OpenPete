@@ -14,7 +14,8 @@
 # uses: `api->guest_alloc` - one arena for all per-player state, carried by savestates and rewind
 # uses: `api->guest` - swapping state into and out of the game's own globals
 # uses: `api->call` - running the game's model, shadow and flame renderers for player 2
-# uses: `api->binding_down` - the swap_view development key, and players 2-4's controller
+# uses: `api->binding_down` - the swap_view development key, and controller slot probes
+# uses: openpete_imgui.h - reading players 2-4's controller on every present
 # uses: `api->data_dir` - settings.txt, shared by the in-game menu and the M panel
 # uses: openpete_mod_ui.h - the settings panel in the M overlay
 # uses: `api->register_toggle_hook` - stands player 2 down if the mod is disabled mid-level
@@ -23,7 +24,7 @@
 [mod]
 id      = "spyro-coop"
 name    = "Spyro Co-Op"
-version = "0.11.0"
+version = "0.11.1"
 game    = "spyro-1"
 api     = 1
 
@@ -43,84 +44,24 @@ name    = "swap_view"
 key     = "P"
 purpose = "switch the camera to the other dragon (development aid)"
 
-# Players 2 to 4 (coop_players.c, CONTROLS). "pad:" is the first controller;
-# rebind to "pad2:..." for a second one.
+# Controller probes (coop_controls.c): cross on each pad slot, to learn which
+# slot a controller is. The engine takes at most 8 [[binding]] rows per mod.
 [[binding]]
-name    = "extra_cross"
+name    = "probe_pad1_cross"
 key     = "pad:south"
-purpose = "players 2-4: cross"
+purpose = "players 2-4: cross, controller slot 1 (test)"
 
 [[binding]]
-name    = "extra_circle"
-key     = "pad:east"
-purpose = "players 2-4: circle"
+name    = "probe_pad2_cross"
+key     = "pad2:south"
+purpose = "players 2-4: cross, controller slot 2 (test)"
 
 [[binding]]
-name    = "extra_square"
-key     = "pad:west"
-purpose = "players 2-4: square"
+name    = "probe_pad3_cross"
+key     = "pad3:south"
+purpose = "players 2-4: cross, controller slot 3 (test)"
 
 [[binding]]
-name    = "extra_triangle"
-key     = "pad:north"
-purpose = "players 2-4: triangle"
-
-[[binding]]
-name    = "extra_l1"
-key     = "pad:leftshoulder"
-purpose = "players 2-4: L1"
-
-[[binding]]
-name    = "extra_r1"
-key     = "pad:rightshoulder"
-purpose = "players 2-4: R1"
-
-[[binding]]
-name    = "extra_l2"
-key     = "pad:lefttrigger"
-purpose = "players 2-4: L2"
-
-[[binding]]
-name    = "extra_r2"
-key     = "pad:righttrigger"
-purpose = "players 2-4: R2"
-
-[[binding]]
-name    = "extra_up"
-key     = "pad:dpup"
-purpose = "players 2-4: d-pad up"
-
-[[binding]]
-name    = "extra_down"
-key     = "pad:dpdown"
-purpose = "players 2-4: d-pad down"
-
-[[binding]]
-name    = "extra_left"
-key     = "pad:dpleft"
-purpose = "players 2-4: d-pad left"
-
-[[binding]]
-name    = "extra_right"
-key     = "pad:dpright"
-purpose = "players 2-4: d-pad right"
-
-[[binding]]
-name    = "extra_stick_up"
-key     = "pad:-lefty"
-purpose = "players 2-4: left stick up"
-
-[[binding]]
-name    = "extra_stick_down"
-key     = "pad:lefty"
-purpose = "players 2-4: left stick down"
-
-[[binding]]
-name    = "extra_stick_left"
-key     = "pad:-leftx"
-purpose = "players 2-4: left stick left"
-
-[[binding]]
-name    = "extra_stick_right"
-key     = "pad:leftx"
-purpose = "players 2-4: left stick right"
+name    = "probe_pad4_cross"
+key     = "pad4:south"
+purpose = "players 2-4: cross, controller slot 4 (test)"

@@ -15,7 +15,7 @@
  * lived, and slots 2 and 3 in CoopPartyArena. Which PLAYER is in which slot is
  * CoopPartyArena.person: normally slot n holds player n+1, and the view key
  * and handovers trade entries. Anything keyed to a person rather than a
- * position, such as colour, asks coop_physical_player.
+ * position, such as color, asks coop_physical_player.
  *
  * WHAT CHANGED FROM THE PS1 BUILD. There it was 24 patched instructions and
  * 11 KB of BIOS scratch RAM. Here it is overrides that call base() once per
@@ -234,7 +234,7 @@ void coop_p2_position(int32_t out[3]) {
 /* THE NULL FOCUS, found on PS1 on 2026-09-02 after twelve misses.
    func_8003FE40, reached from Spyro's tick, copies the pointer at
    g_Spyro + 0x21C straight into g_Camera.m_Focus without checking it, and
-   nothing in the main executable ever initialises that field. A null makes
+   nothing in the main executable ever initializes that field. A null makes
    the camera follow address zero. The game's own loaders assign
    &g_Spyro.m_Position to m_Focus, which is correct for whichever player is
    ticking because the struct address is fixed while its contents swap. */
@@ -297,7 +297,7 @@ void coop_resample_teleport(void) {
 
 /* EACH EXTRA DRAGON KEEPS HIS OWN HEALTH ACROSS A LEVEL CHANGE. Seeding copies
    slot 0's state into every shadow, health included, and Sparx takes its
-   colour from health. So on entering a level player 2's Sparx showed player
+   color from health. So on entering a level player 2's Sparx showed player
    1's health (seen 2026-09-13 in Dark Hollow). Retail carries health between
    levels, so a level change remembers each shadow's before it is stood down,
    and the seed puts it back. A death forgets it: the stock respawn gives
@@ -477,7 +477,7 @@ static void handover_resume(CoopArena* A) {
  *   - never in flight levels, where they fly side by side constantly; the push
  *     fighting flight physics every frame was what damped vertical steering
  * ---------------------------------------------------------------------- */
-#define BODY_RADIUS 0x1A0  /* 416 units centre to centre */
+#define BODY_RADIUS 0x1A0  /* 416 units center to center */
 #define BODY_HEIGHT 0x2A0  /* ignore each other beyond this height gap */
 
 static void separate_pair(int32_t* p1, int32_t* p2) {
@@ -529,7 +529,7 @@ static void separate_players(CoopArena* A) {
  * Slot 3 flies 1280 units out to the side, and at the Sunny Flight portal in
  * Artisans that misses the ground: he glides on in a straight line forever,
  * through the scenery, out of anyone's control. Retail never meets this
- * because Spyro exits dead centre.
+ * because Spyro exits dead center.
  *
  * So a dragon still in the exit glide STRAY_TICKS after another has landed is
  * set down beside that one: a copy of the landed dragon's state, keeping his
@@ -638,17 +638,16 @@ static void maybe_swap_view(CoopArena* A) {
 /* ------------------------------------------------------------------------
  * CONTROLS (2026-09-13). OpenPete gives the game one controller: Spyro 1
  * reads only port 1, and the second pad buffer stays empty (coop_pad.c). So
- * players 2 to 4 are read by the mod itself, through the gamepad bindings
- * declared in mod.toml (rebindable in openpete.toml under
- * [keys.mod.spyro-coop]; "pad2:south" names a second controller), and turned
- * into the game's own pad record here, the way PadVSync builds player 1's.
+ * players 2 to 4 are read by the mod itself (coop_controls.c says from
+ * where), and turned into the game's own pad record here, the way PadVSync
+ * builds player 1's.
  * For the user's setup player 1 is on the keyboard alone and the controller
  * drives the others; a "pad:" button left in player 1's game bindings moves
  * both.
  *
  * The record starts as player 1's (controller type, calibration) with every
  * input replaced: held from the bindings, down and released as edges against
- * last tick's held (kept in the arena, so rewind agrees), the sticks centred.
+ * last tick's held (kept in the arena, so rewind agrees), the sticks centered.
  * As in the game, the left stick stands in for the d-pad when the d-pad is
  * idle. Every buffered frame holds the same buttons; only the first carries
  * the edges, so a press lands once however many substeps run.
@@ -683,21 +682,6 @@ static void maybe_swap_view(CoopArena* A) {
 #define PADB_LEFT     0x8000u
 #define PADB_DPAD     (PADB_UP | PADB_RIGHT | PADB_DOWN | PADB_LEFT)
 
-typedef struct { const char* binding; uint32_t bit; } PadBinding;
-
-static const PadBinding k_extra_buttons[] = {
-    { "extra_cross",    PADB_CROSS },    { "extra_circle",   PADB_CIRCLE },
-    { "extra_square",   PADB_SQUARE },   { "extra_triangle", PADB_TRIANGLE },
-    { "extra_l1",       PADB_L1 },       { "extra_r1",       PADB_R1 },
-    { "extra_l2",       PADB_L2 },       { "extra_r2",       PADB_R2 },
-    { "extra_up",       PADB_UP },       { "extra_down",     PADB_DOWN },
-    { "extra_left",     PADB_LEFT },     { "extra_right",    PADB_RIGHT },
-};
-static const PadBinding k_extra_stick[] = {
-    { "extra_stick_up",   PADB_UP },     { "extra_stick_down",  PADB_DOWN },
-    { "extra_stick_left", PADB_LEFT },   { "extra_stick_right", PADB_RIGHT },
-};
-
 static void put32(uint8_t* rec, unsigned off, uint32_t v) { memcpy(rec + off, &v, 4); }
 
 static void build_extra_pad(uint8_t* out, const uint8_t* p1_pad) {
@@ -705,14 +689,7 @@ static void build_extra_pad(uint8_t* out, const uint8_t* p1_pad) {
     if (g_settings.extra_controls != EXTRA_CONTROLS_CONTROLLER)
         return;                                         /* copy player 1 */
 
-    uint32_t held = 0;
-    for (unsigned i = 0; i < COUNT(k_extra_buttons); i++)
-        if (g_api->binding_down(g_self, k_extra_buttons[i].binding))
-            held |= k_extra_buttons[i].bit;
-    if (!(held & PADB_DPAD))
-        for (unsigned i = 0; i < COUNT(k_extra_stick); i++)
-            if (g_api->binding_down(g_self, k_extra_stick[i].binding))
-                held |= k_extra_stick[i].bit;
+    uint32_t held = coop_controls_held();         /* coop_controls.c */
 
     CoopPartyArena* P = coop_party_arena();
     uint32_t down     = held & ~P->controller_held;

@@ -16,11 +16,12 @@
  *     editors, and the next launch, see it.
  *
  * Settings are host state, not arena state, on purpose: a savestate load or a
- * rewind should not undo a colour the player just picked.
+ * rewind should not undo a color the player just picked.
  */
 
 #include "coop.h"
 #include <openpete_mod_ui.h>
+#include <openpete_imgui.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -35,7 +36,7 @@ static volatile int g_ui_dirty;
 
 /* Spyro's own purple at zero strength for both, exactly as the PS1 build
    seeded it: a fresh install looks like retail, and turning STRENGTH up walks
-   toward the chosen colour rather than lurching from an unrelated one. */
+   toward the chosen color rather than lurching from an unrelated one. */
 static const uint8_t k_default_color[4] = { 0x78, 0x58, 0xA8, 0x00 };
 
 static void set_defaults(CoopSettings* s) {
@@ -200,9 +201,9 @@ static void settings_panel(const openpete_mod_ui_t* ui) {
     if (ui->combo("Players 2-4 controls", &idx, controls, EXTRA_CONTROLS_COUNT)) {
         g_ui_copy.extra_controls = idx; changed = 1;
     }
-    ui->tooltip("Controller: players 2 to 4 follow this mod's gamepad bindings. For "
-                "player 1 on the keyboard alone, remove the \"pad:\" entries from the "
-                "game's own pad keys. Copy player 1: every dragon follows player 1.");
+    ui->tooltip("Controller: players 2 to 4 follow the controller. For player 1 on the "
+                "keyboard alone, remove the \"pad:\" entries from the game's own pad "
+                "keys. Copy player 1: every dragon follows player 1.");
 
     idx = g_ui_copy.respawn_modern;
     if (ui->combo("Respawn", &idx, respawn, 2)) { g_ui_copy.respawn_modern = idx; changed = 1; }
@@ -215,7 +216,7 @@ static void settings_panel(const openpete_mod_ui_t* ui) {
                 "The choice is saved for when it arrives.");
 
     ui->separator();
-    ui->text("Colours (strength 0 leaves Spyro's own colour)");
+    ui->text("Colors (strength 0 leaves Spyro's own color)");
     for (int p = 0; p < COOP_MAX_PLAYERS; p++)
         color_rows(ui, p, &changed);
 
@@ -231,4 +232,19 @@ static void settings_panel(const openpete_mod_ui_t* ui) {
         g_ui_dirty = 1;
 }
 
-OPENPETE_MOD_UI_SECTION(settings_panel)
+/* ALWAYS, since v0.11.1: the controller for players 2 to 4 is read through
+   ImGui on every present (coop_controls.c), and only an always section runs
+   with the overlay closed. Such a section runs at top level instead of inside
+   the Mods panel, so the settings get their own window while the overlay is
+   open. */
+static void section(const openpete_mod_ui_t* ui) {
+    coop_controls_sample();
+    if (!ui->overlay_open())
+        return;
+    ImGui_SetNextWindowSize((ImVec2){ 420.0f, 0.0f }, ImGuiCond_FirstUseEver);
+    if (ImGui_Begin("Spyro Co-Op", NULL, 0))
+        settings_panel(ui);
+    ImGui_End();
+}
+
+OPENPETE_MOD_UI_SECTION_FLAGS(section, OPENPETE_MOD_UI_ALWAYS)

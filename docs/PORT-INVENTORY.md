@@ -13,7 +13,7 @@ on OpenPete, and which phase it belongs to.
 | **B** | Gameplay correctness: nearest-player enemies, individual death and respawn, Sparx, body separation, sound. | A |
 | **C** | Player 2's own controller. | B1 in `PORTING.md` (upstream) |
 | **D** | Split-screen rendering and HUD. | B3 / B4 in `PORTING.md` |
-| **E** | Settings UI (players, split, colour). | D, mostly |
+| **E** | Settings UI (players, split, color). | D, mostly |
 | drop | PS1-only machinery with no job left on OpenPete. | |
 
 ---
@@ -42,7 +42,7 @@ continuation once."* That is the whole technique.
 the return address, written by the caller before the call."* This matters
 because the PS1 mod patched **one call site**, while an override catches
 **every call** to a function. Spyro's tick and the camera update both have
-other callers, listed in section 2, and they must get stock behaviour.
+other callers, listed in section 2, and they must get stock behavior.
 
 **Registers change across `base()`.** The same reference: *"expect a0..a3,
 t0..t9, v0, v1 and ra to have changed across it."* An override that calls
@@ -118,7 +118,7 @@ come back later if it is still wanted. Phase **E**.
 | PS1 hook | What it did | OpenPete | Phase |
 | --- | --- | --- | --- |
 | `0x8004AE38` `j Sp1x2ProbeGate` | Refuse a segment probe whose end has a coordinate negative or `>= 0x400000`. Averted a freeze. | `override_addr` reading `a1`, returning `v0 = 0` without `base()`. Counted. | **A** |
-| `0x8004BE4C` `j Sp1x2QueryGate` | Same rule on the sphere query centre. | Same, reading `a0`. | **A** |
+| `0x8004BE4C` `j Sp1x2QueryGate` | Same rule on the sphere query center. | Same, reading `a0`. | **A** |
 | `0x80017228`, `0x8001722C` `add` → `addu` | Retail "Baruti crash": signed overflow trap in `VecMagnitude`. | Probably moot: a recompiler is unlikely to emulate the overflow exception. **Not verified.** | check in B |
 
 The guards are in phase A deliberately. They defended against exactly the kind
@@ -183,7 +183,7 @@ All addresses retail. Every one except `0x800770BC` has an SDK name.
 
 `g_Spyro + 0x21C` is armed with `&g_Spyro.m_Position` when null, before each
 tick. `func_8003FE40` copies it unchecked into `g_Camera.m_Focus`, and nothing
-in the main executable initialises it. This was the real null-focus bug on PS1.
+in the main executable initializes it. This was the real null-focus bug on PS1.
 
 ---
 
@@ -205,7 +205,7 @@ in the main executable initialises it. This was the real null-focus bug on PS1.
 | fairy mute | arena (B) |
 | moby owner, mask stash, `m_WasDrawn` sync | arena (B) |
 | region visibility tables, particle snapshot, flame chains, render pass | only if the scene is built twice (D) |
-| split, widescreen, view fit, players, colour | `[[config]]` (E); players and a phase A enable switch are in now |
+| split, widescreen, view fit, players, color | `[[config]]` (E); players and a phase A enable switch are in now |
 | menu cursor, wobble mobys, menu active | **drop** unless the in-game page returns |
 | dead diagnostic slots `0x8000ED70..7C`, markers `0x8000F000` | **drop** |
 
@@ -221,7 +221,7 @@ These cost the PS1 project real time and apply to any construction:
 - **Either both players' state is swapped, or neither.** A guard on one swap
   and not another left the live camera and live Spyro belonging to different
   players, and the camera measured itself against the wrong dragon.
-- **A missing global produces a specific, recognisable bug.** Walking in place
+- **A missing global produces a specific, recognizable bug.** Walking in place
   (idle cursor), endless jump and glide loop (control flags), flame at the
   wrong dragon (flame struct). Complete the table; do not patch symptoms.
 - **Snapshot before the first consumer.** The substep budget and the input ring
@@ -260,7 +260,7 @@ through a portal into level 11, with the mod toggled off and on once.
 | 1. Engine accepts it? | **Yes.** No warning, refusal or divergence report from the engine. Its only warning was a startup frame-pacing slip that also appeared before the mod existed. |
 | 2. Stable? | **Yes.** No crash or freeze, 100 FPS against a 100 FPS target. |
 | 3. Separate body? | **Yes.** The dragons started 640 apart and reached **55,996** apart while following identical input. Heard: both dragons' wall-bump sounds on a charge. Seen: the invisible dragon killed an enemy. |
-| 4. Return addresses as predicted? | **Yes.** Every gameplay call matched. The other callers seen were the tick at `ra 0x8002E010` (35 calls) and the camera update at `ra 0x8002E018`, both inside `func_8002E000`, gamestate 9, exactly as section 2 lists. They got stock behaviour. |
+| 4. Return addresses as predicted? | **Yes.** Every gameplay call matched. The other callers seen were the tick at `ra 0x8002E010` (35 calls) and the camera update at `ra 0x8002E018`, both inside `func_8002E000`, gamestate 9, exactly as section 2 lists. They got stock behavior. |
 | 5. `PadVSync` inside the swap window? | **Never.** 0 of about 24,000 calls. Phase C very likely does not need the deferred poll. |
 | 6. Collision guards refuse anything? | **No.** 0 and 0. |
 
@@ -415,7 +415,7 @@ Two long-standing bugs, both inherited from the PS1 build, with one cause.
 
 `func_80051FEC`, the moby update list builder. The mod hid a moby from one
 player's pass by zeroing `m_WasDrawn` and `m_UpdateDistance`, which the
-builder's first loop honours. But adding a moby also marks its pod (`m_Pod`,
+builder's first loop honors. But adding a moby also marks its pod (`m_Pod`,
 `0x43`), and a second loop adds **every member of every marked pod** from
 `g_MobyPods`, ignoring both fields. A moby whose podmate belonged to the other
 dragon was updated in both passes. A ram's own code steers the camera of the
@@ -459,7 +459,7 @@ attacks eventually and is hard to reproduce. `BUGS.md` X3.
 
 The moby passes moved from masking plus an override on level code to a filter
 on `func_80051FEC`'s update list, with every hook in the main executable
-(`coop_mobys.c` header). User: enemy behaviour fine, "maybe even better". Log:
+(`coop_mobys.c` header). User: enemy behavior fine, "maybe even better". Log:
 **0 engine errors** (74,705 the session before), **0 collision guard
 refusals** (826 before, so that burst was a side effect of the engine
 bypassing the misplaced hook), 519,609 list entries dropped by the filter, and

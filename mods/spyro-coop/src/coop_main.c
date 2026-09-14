@@ -106,6 +106,7 @@ void coop_publish_status(void) {
                      g_stats.handovers, g_stats.teleports);
     coop_status("View swaps %u (press the swap_view key, P by default)",
                      g_stats.view_swaps);
+    coop_controls_status();
     coop_status("P2 drawn %u times, flame %u times, portal wingman %u times%s",
                      g_stats.p2_draws, g_stats.p2_flame_draws, g_stats.flyin_draws,
                      g_settings.draw_p2 ? "" : " (drawing OFF in settings)");

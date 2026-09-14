@@ -43,7 +43,7 @@ cannot be on one screen.
 
 Built 2026-09-13 at the user's request. The mod was written around exactly one
 extra dragon; it now runs up to three shadows (slots 1..3), with a table of
-which player is in which slot, so colours, moby ownership and Sparx follow the
+which player is in which slot, so colors, moby ownership and Sparx follow the
 person through the view key and handovers. PLAYERS on the Multiplayer page
 and in the M panel goes from 1 to 4.
 
@@ -81,7 +81,7 @@ M panel picks one of eight, and O plays it on the camera's dragon without
 dying (`coop_effects.c`). All are the game's own particles or crystal pieces,
 work in every homeworld and level, and were each seen drawing in the native
 renderer headless (`shots/respawn-effects-v090.png`): smoke puff, white
-sparks, orange sparks, dust ring, colour flash in the player's colour, chest
+sparks, orange sparks, dust ring, color flash in the player's color, chest
 break, magic pop, and the crystal burst (the rescue crystal's pieces; only in
 levels with dragons, which is every place a respawn happens).
 
@@ -91,7 +91,7 @@ and the dust ring. Everything but the dust ring was coming out of the top of
 Spyro's head; an "Effect height" slider now sets where they start, default
 -200 from his position.
 
-**v0.9.2:** the colour flash is gone, and the rescue star is a new layer: the
+**v0.9.2:** the color flash is gone, and the rescue star is a new layer: the
 flat star that grows out of a frozen dragon when Spyro touches it, drawn with
 the rescue's own renderer and animation (`coop_effects.c`). The default mix is
 now crystal burst, orange sparks, white sparks, dust ring, smoke puff and the
@@ -213,63 +213,63 @@ with controllers, so every player-facing setting must be reachable in game.
 
 **Stages:**
 
-1. **Built:** settings core, the M panel, and per-player colour applied to both
+1. **Built:** settings core, the M panel, and per-player color applied to both
    dragons (including the portal wingman) through the game's own tint.
 2. **Confirmed by the user (v0.6.0), revised in v0.6.1:** MULTIPLAYER row in
    the pause list, above QUIT / EXIT LEVEL, and the Multiplayer page: PLAYERS,
-   RESPAWN, SPLIT (grey, with a "not available yet" hint), then COLORS and
+   RESPAWN, SPLIT (gray, with a "not available yet" hint), then COLORS and
    DONE, settings above and ways out below at the user's request. The big
    title reads MULTIPLAYER in place of PAUSED. Hints under the box for
    RESPAWN ("death causes individual respawn" / "death restarts both
    dragons") and SPLIT. TRIANGLE or DONE goes back one level.
 3. **Built (v0.6.0), widened in v0.6.1:** the Colors page: RED, GREEN, BLUE,
    STRENGTH for P1 to P4, LEFT/RIGHT by one, L2/R2 by 16, SQUARE resets the
-   column. Columns for players beyond the PLAYERS setting are grey and
-   skipped by the cursor. Settings now keep four colours.
+   column. Columns for players beyond the PLAYERS setting are gray and
+   skipped by the cursor. Settings now keep four colors.
 4. **Spinning dragon previews: built in v0.7.0, switched off in v0.7.1.**
    ENGINE SIDE, for the author. In play the native renderer draws the pause
    screen over a frozen snapshot of the last gameplay frame and draws no 3D
    model on top, so the user saw none; they appeared only in headless
    screenshots, which have no snapshot. The code stays in `coop_menu.c`
    behind `COOP_PREVIEW_DRAGONS`, standing in the neutral pose (animation 0,
-   frame 0) at the user's request, and the colour swatches are back in their
+   frame 0) at the user's request, and the color swatches are back in their
    row. Ask for: model draws over the pause backdrop.
 
 Checked headless 2026-09-13 with screenshots (`--skip-to-level artisans` and a
 scripted movie): the list with five rows and a grown box, the shimmer on
 MULTIPLAYER, both pages, a value change, backing out, and moving past
 MULTIPLAYER in both directions. The EXIT LEVEL variant confirmed by the user;
-the flight-level QUIT variant not yet seen. The grey "disabled" shade shows pale purple in the
+the flight-level QUIT variant not yet seen. The gray "disabled" shade shows pale purple in the
 native renderer; the user is fine with it.
 
-**Fixed in v0.6.2, at the user's report:** text was centred on
-length x spacing, but the builder positions letter CENTRES, moves a space on by
+**Fixed in v0.6.2, at the user's report:** text was centered on
+length x spacing, but the builder positions letter CENTERS, moves a space on by
 three quarters, and moves the first letter (and any after a digit or space) on
 by the size; lines sat half a letter left, and lines with spaces further. And
 in a wide window the native renderer stretches a plain flat quad over the whole
-window while the text, box and lines stay in the centred 4:3 area, so the
+window while the text, box and lines stay in the centered 4:3 area, so the
 swatches slid out of their frames on an ultrawide screen. Their corners are now
 squeezed by that stretch, from the window aspect the present hook reports.
 Gradient quads and TILE sprites were tried as swatches and do not draw in the
 native pause view at all. (The swatches were then replaced by the dragons in
 v0.7.0, which, being 3D models, need no squeeze.)
 
-### C1. Colour follows the slot, not the dragon: FIXED in v0.5.1, awaiting test
+### C1. Color follows the slot, not the dragon: FIXED in v0.5.1, awaiting test
 
 Seen 2026-09-13 with player 1 green and player 2 red: after the view key the
 camera's dragon was still green, and player 2 talked to the balloonist and
-freed a dragon as a green dragon. Colour was chosen by slot, and both the view
+freed a dragon as a green dragon. Color was chosen by slot, and both the view
 key and a handover put player 2's dragon in slot 0. `coop_physical_player`
 now answers which person is in each slot, from the view-key state and the
 handover flag. Known gap: if player 2 dies in a way that runs the stock death
-sequence, the death animation still shows player 1's colour.
+sequence, the death animation still shows player 1's color.
 
-### C2. The portal wingman's colour: FIXED in v0.5.2
+### C2. The portal wingman's color: FIXED in v0.5.2
 
-Confirmed by the user 2026-09-13: two different colours through the portal,
-the camera's dragon keeps its own colour with interpolation on, and colours
+Confirmed by the user 2026-09-13: two different colors through the portal,
+the camera's dragon keeps its own color with interpolation on, and colors
 follow their dragons across the view key. Cause and fix: OpenPete's native
-rebuild of Spyro takes one colour per renderer call, from the last dragon drawn
+rebuild of Spyro takes one color per renderer call, from the last dragon drawn
 in it, so every extra dragon is its own call, drawn before the camera's dragon.
 
 ### C3. Spyro is purple in a dragon's dialogue: ENGINE SIDE, for the author
@@ -277,8 +277,8 @@ in it, so every extra dragon is its own call, drawn before the camera's dragon.
 Measured 2026-09-13 (v0.5.3 diagnostic). During a dragon rescue the model
 renderer was called from three sites, `0x8001D180`, `0x8001D4B8` and
 `0x8001D5D4`, every time with the player's filter going in (`9700FF00`,
-green) and the retail renderer's GTE far colour coming out green. The user
-still saw purple in the conversation. So the mod's colour reaches the game's
+green) and the retail renderer's GTE far color coming out green. The user
+still saw purple in the conversation. So the mod's color reaches the game's
 renderer, and OpenPete's native rebuild of Spyro does not apply the filter in
 these scenes, although it does in gameplay and the portal sequences. Nothing
 the mod can reach; include it in the note to the OpenPete author.
@@ -291,7 +291,7 @@ The readout counts voices measured from player 2's camera.
 
 ### M4. Player 2's health across levels: BUILT in v0.4.2, awaiting test
 
-Seen 2026-09-13 in Dark Hollow: player 2 arrived with player 1's Sparx colour,
+Seen 2026-09-13 in Dark Hollow: player 2 arrived with player 1's Sparx color,
 because seeding copies player 1's whole state, health included. Player 2 now
 keeps his own health through a level change. A death still gives both full
 health.
@@ -362,24 +362,33 @@ the native renderer's choice.
 | PS1, v0.5.2 | wing line, level | the look the user wants; overlaps side-on |
 | v0.5.3 | square to the camera's view | nose to tail side-on; rejected |
 | v0.5.4 | behind, out along the wing line, and lower | one big dragon and one small; rejected |
-| v0.5.5 | lead drawn first | no change in the native renderer, and both dragons took one colour |
+| v0.5.5 | lead drawn first | no change in the native renderer, and both dragons took one color |
 | v0.5.6 | dropping below the lead as the camera swings side-on | clear, but looked wrong at the landing; rejected, user wants one level plane |
 | **v0.5.7** | **back to the wing line, level** | parked |
 
 For the author note: two Spyro model draws in one frame are not depth-ordered
 by the native renderer the way PsyCross orders them.
 
-### X2. Extra players' controls: one controller for players 2-4 (v0.11.0), awaiting test
+### X2. Extra players' controls: one controller for players 2-4, TEST BUILD v0.11.1
 
 OpenPete still never fills the game's second pad buffer (`docs/PORTING.md`,
-B1), but a mod can read a host gamepad through its own bindings. Players 2 to
-4 now read the controller bound in mod.toml (`extra_*`, default "pad:" =
-the first controller) and get a pad record built like the game's own
-(`coop_players.c`, CONTROLS); "Players 2-4 controls" in the M panel switches
-back to copying player 1. For the user's test, player 1 is keyboard-only
-(openpete.toml's game pad keys no longer list "pad:" buttons) and all three
-extra dragons share the PS5 controller. Checked headless: with "Controller"
-and no device, player 1 walks and the others stand; with "Copy" they follow.
-Not yet seen with a real controller, including whether the left stick
-bindings ("pad:-lefty" and so on) read as held. Separate controllers per
-player would need "pad2:" to "pad4:" bindings per player.
+B1), so the mod reads the extra players' controller from the host and builds
+a pad record like the game's (`coop_players.c`, CONTROLS). "Players 2-4
+controls" in the M panel switches back to copying player 1. Headless: with
+"Controller" and no device, player 1 walks and the others stand; with "Copy"
+they follow.
+
+**v0.11.0, first real test (DualSense, player 1 on the keyboard): failed.**
+Face buttons and d-pad moved nobody; the left stick and Options moved player
+1. Two causes in the log: the engine accepts at most **8 [[binding]] rows**
+per mod, so 9 of the 16 were refused (and each refused lookup logged an
+error, 14,895 of them); and the 7 accepted "pad:" rows never read as held.
+The log lists three SDL pads: the DualSense, an "XInput Controller #1" and
+the Razer keyboard. openpete.toml's `left_x = "none"` did not stop the stick.
+
+**v0.11.1 measures both routes** (`coop_controls.c`): ImGui's gamepad keys,
+read in an always-on UI section every present (no row limit), and four probe
+bindings putting cross on pad:, pad2:, pad3: and pad4:. The first input on
+each is logged and the M panel shows them live. The settings moved to their
+own "Spyro Co-Op" window, since an always section runs outside the Mods
+panel. Player 1's sticks now point at the empty pad4 slot.

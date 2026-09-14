@@ -19,7 +19,7 @@
  *       70  orange spark streaks, a3 = speed (the chest break: 16, 0x20)
  *       33  dust at Spyro's feet, a2 = velocity, read from the live g_Spyro
  *           (the heavy landing makes a ring of four)
- *       12  the gem-collect pop, a2 = a Moby*, a3 = colour 0x00BBGGRR
+ *       12  the gem-collect pop, a2 = a Moby*, a3 = color 0x00BBGGRR
  *   - crystal fragments, class 251, through the level's g_SpawnMoby: the
  *     pieces a rescued dragon's crystal breaks into. They fall, smoke and
  *     vanish on their own, but exist only in levels with dragons (homeworlds

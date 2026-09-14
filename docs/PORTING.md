@@ -102,7 +102,7 @@ So the comparison is:
 | Pad service fills buffer 2 | **yes** | **no, flat zeros** |
 
 Against a stated promise of gameplay bit-identical to original hardware, the
-second argument to `PadInitDirect` not being honoured is a divergence worth
+second argument to `PadInitDirect` not being honored is a divergence worth
 fixing on its own terms, independently of whether anyone ever writes a co-op
 mod.
 
