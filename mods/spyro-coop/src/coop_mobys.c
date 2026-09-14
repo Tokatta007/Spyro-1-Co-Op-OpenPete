@@ -95,6 +95,36 @@ static uint8_t decide_owner(uint8_t prev, const int64_t d[], int n, int64_t keep
     return (uint8_t)best;
 }
 
+/* PORTALS (2026-09-13, seen by the user and reproduced headless). Touching a
+   portal (special_surfaces.c, case 6) sets g_HasLevelTransition and switches
+   on the portal's path moby, which then carries IN whichever dragon is live
+   when it updates. Owned by the nearest dragon, it could update in another
+   dragon's pass and wait for him instead: the one who touched it walked into
+   the portal as if it were a wall until the other happened to arrive. So
+   while a transition is pending, the path moby belongs to the dragon whose
+   tick touched the portal (CoopPartyArena.portal_pin). Returns the moby
+   index, or -1 when nothing is pinned. */
+static int portal_path_moby(unsigned n, int ns, uint8_t* slot) {
+    CoopPartyArena* P = coop_party_arena();
+    if (*guest32(OP_GADDR_g_HasLevelTransition) == 0) {
+        P->portal_pin = 0;
+        return -1;
+    }
+    int s = P->portal_pin - 1;
+    uint32_t idx = (uint32_t)*guest32(OP_GADDR_D_8007576C);
+    if (s < 0 || s > ns || idx >= 6)
+        return -1;
+    uint32_t portal = *(uint32_t*)g_api->guest(OP_GADDR_g_Portals + idx * 4);
+    int32_t* pp = portal ? (int32_t*)g_api->guest(portal) : NULL;
+    if (!pp)
+        return -1;
+    int32_t path = pp[0x18 / 4];             /* Portal.m_PathMoby */
+    if (path < 0 || (unsigned)path >= n)
+        return -1;
+    *slot = (uint8_t)s;
+    return path;
+}
+
 static unsigned assign_mobys(CoopMobyArena* M, Moby* mobys, uint32_t mobys_vaddr) {
     int ns = coop_seeded_shadows();
     const int32_t* pos[COOP_MAX_PLAYERS];
@@ -204,6 +234,11 @@ static unsigned assign_mobys(CoopMobyArena* M, Moby* mobys, uint32_t mobys_vaddr
         pod_owner[p] = decide_owner(M->owner[pod_first[p]], pod_d[p], ns, keep);
     }
 
+    uint8_t pin_slot = 0;
+    int pin_moby = portal_path_moby(n, ns, &pin_slot);
+    if (pin_moby >= 0 && pod_of[pin_moby] >= 0)
+        pod_owner[pod_of[pin_moby]] = pin_slot;  /* its whole group goes with it */
+
     /* ---- assign every moby ---- */
     unsigned pod_members = 0;
     for (unsigned i = 0; i < n; i++) {
@@ -234,6 +269,8 @@ static unsigned assign_mobys(CoopMobyArena* M, Moby* mobys, uint32_t mobys_vaddr
                 M->owner[i] = decide_owner(prev, d, ns, keep);
             }
         }
+        if ((int)i == pin_moby)
+            M->owner[i] = pin_slot;
         if (prev < COOP_MAX_PLAYERS && M->owner[i] != prev)
             g_stats.owner_flips++;
     }

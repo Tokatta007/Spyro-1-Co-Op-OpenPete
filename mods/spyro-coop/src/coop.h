@@ -187,6 +187,9 @@ typedef struct {
     int32_t    flight_out[COOP_MAX_PLAYERS];      /* per PLAYER: crashed, sitting out */
     uint32_t   flight_end_real;                   /* this flight level's Flight1 */
     int32_t    health_before_flight[COOP_MAX_PLAYERS]; /* per slot: restored on leaving one */
+    int32_t    portal_pin;     /* slot + 1 of the dragon who touched a portal, 0 = none */
+    int32_t    stray_ticks[COOP_MAX_PLAYERS];     /* per slot: exit glide after slot 0 landed */
+    int32_t    results_pending; /* flight results shown: reseed when play resumes */
 } CoopPartyArena;
 
 /* ------------------------------------------------------------------------
@@ -264,6 +267,7 @@ typedef struct {
     unsigned menu_opens;          /* Multiplayer page opened from the pause list */
     unsigned effects_played;      /* respawn effects, real and tested */
     unsigned flight_sit_outs;     /* crashes in a flight level that did not end it */
+    unsigned strays_landed;       /* dragons set down after missing a portal exit */
 } CoopStats;
 
 extern CoopStats g_stats;

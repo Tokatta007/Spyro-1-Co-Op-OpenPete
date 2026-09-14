@@ -183,6 +183,17 @@ static void trade_persons(int slot) {
     int32_t t = P->person[0];
     P->person[0] = P->person[slot];
     P->person[slot] = t;
+    if (P->portal_pin == 1)                  /* the portal's dragon moved too */
+        P->portal_pin = slot + 1;
+    else if (P->portal_pin == slot + 1)
+        P->portal_pin = 1;
+}
+
+/* Remember which dragon's tick touched a portal (see coop_mobys.c, PORTALS). */
+static int32_t level_transition(void) { return *guest32(OP_GADDR_g_HasLevelTransition); }
+static void note_portal_touch(int32_t before, int slot) {
+    if (!before && level_transition())
+        coop_party_arena()->portal_pin = slot + 1;
 }
 
 static void reset_persons(void) {
@@ -350,6 +361,8 @@ static void seed_shadows(CoopArena* A) {
     P->shadows    = n;
     A->ready      = 1;
     reset_persons();                         /* every shadow is a fresh copy of slot 0 */
+    P->portal_pin = 0;
+    P->results_pending = 0;
 
     /* A flight level's "Try again" reloads without leaving the level, so
        nothing else forgets who sat out: without this the crashed dragon came
@@ -504,6 +517,57 @@ static void separate_players(CoopArena* A) {
 }
 
 /* ------------------------------------------------------------------------
+ * PORTAL EXIT STRAYS (2026-09-13, seen by the user with four players and
+ * reproduced headless). Leaving a level, every dragon glides out of the portal
+ * in formation (Spyro state 15, walking state 9) until he finds the landing.
+ * Slot 3 flies 1280 units out to the side, and at the Sunny Flight portal in
+ * Artisans that misses the ground: he glided on in a straight line forever,
+ * through the scenery, and never came back under control. Retail never meets
+ * this because Spyro exits dead centre.
+ *
+ * So a shadow still in the exit glide a second after slot 0 has landed is set
+ * down beside him: a copy of slot 0's state, keeping his own health, half his
+ * formation step out. The body separation spreads them from there.
+ * ---------------------------------------------------------------------- */
+#define SPYRO_OFF_STATE         0x078
+#define SPYRO_OFF_WALKING_STATE 0x07C
+#define STRAY_TICKS             60
+
+static int in_exit_glide(const uint8_t* spyro) {
+    return *(const int32_t*)(spyro + SPYRO_OFF_STATE) == 15 &&
+           *(const int32_t*)(spyro + SPYRO_OFF_WALKING_STATE) == 9;
+}
+
+static void land_strays(CoopArena* A) {
+    CoopPartyArena* P = coop_party_arena();
+    int n = coop_seeded_shadows();
+    int leader_gliding = in_exit_glide(guest8(OP_GADDR_g_Spyro));
+    for (int k = 1; k <= n; k++) {
+        CoopShadowView v = coop_shadow(k);
+        if (leader_gliding || !in_exit_glide(v.spyro)) {
+            P->stray_ticks[k] = 0;
+            continue;
+        }
+        if (++P->stray_ticks[k] < STRAY_TICKS)
+            continue;
+        P->stray_ticks[k] = 0;
+
+        int32_t health = *(int32_t*)(v.spyro + SPYRO_OFF_HEALTH);
+        walk(k_spyro_regions, COUNT(k_spyro_regions), v.spyro, 0);  /* copy slot 0 */
+        *(int32_t*)(v.spyro + SPYRO_OFF_HEALTH) = health;
+        int32_t off[3];
+        coop_formation_offset(k, off);
+        int32_t* pos = (int32_t*)(v.spyro + SPYRO_OFF_POSITION);
+        pos[0] += off[0] / 2;
+        pos[1] += off[1] / 2;
+        g_stats.strays_landed++;
+        coop_log(OP_MOD_LOG_INFO, "player %d missed the portal landing; set down beside player %d",
+                 coop_physical_player(k) + 1, coop_physical_player(0) + 1);
+    }
+    (void)A;
+}
+
+/* ------------------------------------------------------------------------
  * The dev view swap: press the bound key to move the camera to the next
  * player's dragon. The only way to SEE the others before there is a second
  * render pass. Reading a host key in a tick hook makes a replay diverge,
@@ -582,7 +646,9 @@ static void on_spyro_tick(CPUState* cpu) {
     arm_script_focus();
     g_in_gameplay_tick = 1;
     g_ticking_player   = 0;
+    int32_t portal_before = level_transition();
     g_api->base(cpu);                                  /* slot 0 */
+    note_portal_touch(portal_before, 0);
     g_in_gameplay_tick = 0;
     coop_respawn_blink_tick();
 
@@ -598,7 +664,8 @@ static void on_spyro_tick(CPUState* cpu) {
 
     /* A new level, or a change in how many players there should be. */
     if (A->ready && (A->last_level != level_id() ||
-                     coop_party_arena()->shadows != coop_shadow_count())) {
+                     coop_party_arena()->shadows != coop_shadow_count() ||
+                     coop_party_arena()->results_pending)) {
         carry_health(A, 0);
         A->ready = 0;                                  /* reseed next frame */
         g_stats.level_reseeds++;
@@ -646,7 +713,9 @@ static void on_spyro_tick(CPUState* cpu) {
         load_regs(cpu, &regs);
         g_in_gameplay_tick = 1;
         g_ticking_player   = k;
+        int32_t portal_before = level_transition();
         g_api->base(cpu);                              /* shadow k */
+        note_portal_touch(portal_before, k);
         g_in_gameplay_tick = 0;
         g_ticking_player   = 0;
         coop_respawn_blink_tick();
@@ -666,6 +735,11 @@ static void on_spyro_tick(CPUState* cpu) {
                 A->ready = 0;
                 forget_health();
                 g_stats.deaths++;
+            } else if (coop_party_arena()->results_pending) {
+                /* His crash ended a flight level. No handover: whatever comes
+                   next reloads every dragon and reseeds, and swapping slot 0's
+                   old state back over the reloaded one would put everyone
+                   back where they crashed. */
             } else {
                 begin_handover(A, k);
             }
@@ -678,6 +752,7 @@ static void on_spyro_tick(CPUState* cpu) {
     }
 
     /* Every dragon has moved this frame: resolve any overlap. */
+    land_strays(A);
     separate_players(A);
     maybe_swap_view(A);
     coop_effects_tick(cpu);

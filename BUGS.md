@@ -102,7 +102,7 @@ The user's crystal-dragon idea as a whole is not possible: the crystal's
 shake is its own moby's animation, and spawning that moby starts the rescue
 cutscene. Once one is chosen, the bench's extra options and key can go.
 
-### M8. Flight levels: a crash sits that player out: BUILT (v0.10.1), awaiting play
+### M8. Flight levels: a crash sits that player out: BUILT (v0.10.2), awaiting play
 
 User request 2026-09-13: flight levels have no respawns, and one crash ended
 the run for everyone. Found in the executable: a flight crash never reaches
@@ -130,6 +130,29 @@ The user's first play of v0.10.0 found two bugs, both fixed in v0.10.1:
   entry and restores it after), and the shadows now do the same. A negative
   health is also never carried. Reproduced headless before the fix: forcing
   player 2 to -1 in Sunny Flight stopped him at z 2423, as in the user's log.
+
+The second play (v0.10.1) confirmed both fixes and found three more, all
+reproduced headless and fixed in v0.10.2:
+
+- **Sat-out dragons stayed frozen through a retry** (log, 281 s). A retry was
+  caught only by the live dragon jumping more than 0x4000 in a frame, and a
+  crash close under the start point jumps less. Now the flight results screen
+  itself marks a reseed for when play resumes, whether the player retries or
+  leaves. When a shadow's crash opens the results, there is no handover
+  either: swapping slot 0's old state back over the reloaded level would put
+  every dragon back where it crashed.
+- **With four players, player 4 flew away after leaving a level** (in a
+  straight line, through the scenery, for good). Every dragon glides out of
+  the exit portal in formation (Spyro state 15, walking state 9) until it
+  finds the landing. Slot 3, 1280 units out, misses it at the Sunny Flight
+  portal. A shadow still in that glide a second after slot 0 lands is now set
+  down beside him (`land_strays`).
+- **A portal acted as a wall** until another dragon arrived. Touching a portal
+  switches on its path moby, which carries in whichever dragon is live when
+  it updates, and it updated in its nearest dragon's pass. The dragon whose
+  tick touched the portal now owns its path moby, and that moby's whole pod,
+  until the transition ends. Headless, player 1 now enters on the same frame
+  as a solo Spyro; before the fix he pushed against the frame for 2.3 seconds.
 
 ### M5. In-game Multiplayer and Color menus: stages 1 to 3 BUILT; stage 4 blocked on the engine
 

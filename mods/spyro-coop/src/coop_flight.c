@@ -88,7 +88,13 @@ static void on_flight_end(CPUState* cpu) {
         }
     }
 
-    /* The real end: the last crash, the timer, or the finish. */
+    /* The real end: the last crash, the timer, or the finish. Whatever the
+       player picks on the results screen, "Try again" or leave, every dragon
+       is seeded afresh when play resumes (coop_players.c). A retry used to be
+       caught only by the live dragon jumping over 0x4000 in a frame, and a
+       crash close under the start point does not: the dragons who had sat
+       out stayed frozen through the retry (seen in the user's log, v0.10.1). */
+    P->results_pending = 1;
     uint32_t real = P->flight_end_real;
     if (real == 0 || real == STUB_ADDR) {
         g_api->base(cpu);
