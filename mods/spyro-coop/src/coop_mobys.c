@@ -125,6 +125,40 @@ static int portal_path_moby(unsigned n, int ns, uint8_t* slot) {
     return path;
 }
 
+/* RIDES (2026-09-13, seen by the user and reproduced headless from their
+   savestate). The lift up to the Dark Hollow portal in Artisans carries Spyro
+   only while it updates with him live: he sets ControlFlags bit 31 and points
+   m_mobyInUseBySpyro (Spyro +0x224) at it, and it drives him up each frame.
+   Ownership is by distance, height included, so once the rider was high
+   enough a dragon standing near the base became "nearer", the lift moved to
+   his pass, and the rider was let go into a glide and fell: 1/2 or 3/4 of
+   the way up, depending on where the others stood. Forcing the owner away at
+   height 3333 dropped him exactly so. A moby being ridden now belongs to its
+   rider; with several riders the current owner keeps it, else the first.
+
+   WHO IS RIDING. The pointer is left stale after a ride, so it needs a second
+   sign. The flag alone is not one: Spyro's tick clears it and the lift sets
+   it again in its own update, so it is clear whenever ownership is decided.
+   State 17 lasts the whole ride; the whirlwind code tests it for "already
+   riding" too. Either one counts. */
+#define SPYRO_OFF_CONTROL_FLAGS 0x1F4
+#define SPYRO_OFF_STATE_M       0x078
+#define SPYRO_OFF_MOBY_IN_USE   0x224
+#define CONTROL_SCRIPTED        0x80000000u
+#define SPYRO_STATE_RIDING      17
+
+static int ridden_moby(const uint8_t* spyro, uint32_t mobys_vaddr, unsigned n) {
+    uint32_t flags = *(const uint32_t*)(spyro + SPYRO_OFF_CONTROL_FLAGS);
+    uint32_t use   = *(const uint32_t*)(spyro + SPYRO_OFF_MOBY_IN_USE);
+    int32_t  state = *(const int32_t*)(spyro + SPYRO_OFF_STATE_M);
+    if (!((flags & CONTROL_SCRIPTED) || state == SPYRO_STATE_RIDING) || use < mobys_vaddr)
+        return -1;
+    uint32_t idx = (use - mobys_vaddr) / sizeof(Moby);
+    if ((use - mobys_vaddr) % sizeof(Moby) != 0 || idx >= n)
+        return -1;
+    return (int)idx;
+}
+
 static unsigned assign_mobys(CoopMobyArena* M, Moby* mobys, uint32_t mobys_vaddr) {
     int ns = coop_seeded_shadows();
     const int32_t* pos[COOP_MAX_PLAYERS];
@@ -239,6 +273,29 @@ static unsigned assign_mobys(CoopMobyArena* M, Moby* mobys, uint32_t mobys_vaddr
     if (pin_moby >= 0 && pod_of[pin_moby] >= 0)
         pod_owner[pod_of[pin_moby]] = pin_slot;  /* its whole group goes with it */
 
+    int ride[COOP_MAX_PLAYERS];
+    ride[0] = ridden_moby(guest8(OP_GADDR_g_Spyro), mobys_vaddr, n);
+    for (int k = 1; k <= ns; k++)
+        ride[k] = ridden_moby(coop_shadow(k).spyro, mobys_vaddr, n);
+    for (int k = ns + 1; k < COOP_MAX_PLAYERS; k++)
+        ride[k] = -1;
+    /* Each ridden moby's rider: its previous owner if he is one, else the
+       first. Settled before the loop so a podmate earlier in the array
+       follows it too. */
+    int rider_of[COOP_MAX_PLAYERS];
+    for (int k = 0; k <= ns; k++) {
+        rider_of[k] = -1;
+        if (ride[k] < 0)
+            continue;
+        int r = -1;
+        for (int j = 0; j <= ns; j++)
+            if (ride[j] == ride[k] && (r < 0 || j == M->owner[ride[k]]))
+                r = j;
+        rider_of[k] = r;
+        if (pod_of[ride[k]] >= 0)
+            pod_owner[pod_of[ride[k]]] = (uint8_t)r;
+    }
+
     /* ---- assign every moby ---- */
     unsigned pod_members = 0;
     for (unsigned i = 0; i < n; i++) {
@@ -271,6 +328,10 @@ static unsigned assign_mobys(CoopMobyArena* M, Moby* mobys, uint32_t mobys_vaddr
         }
         if ((int)i == pin_moby)
             M->owner[i] = pin_slot;
+
+        for (int k = 0; k <= ns; k++)         /* see RIDES */
+            if (ride[k] == (int)i)
+                M->owner[i] = (uint8_t)rider_of[k];
         if (prev < COOP_MAX_PLAYERS && M->owner[i] != prev)
             g_stats.owner_flips++;
     }

@@ -167,11 +167,17 @@ Two portal-exit problems remained, fixed in v0.10.3:
   faces about 228 degrees; measured headless, the old offset ran parallel to
   the flight path. It is perpendicular now, in the fly-out draw and the seed.
 
-**Open: the Artisans whirlwind to the Town Square bridge stopped halfway**
-for every dragon after a Town Square visit (user, v0.10.2). Not reproduced:
-headless, four dragons placed in it (class 421/422 at 70513,65608) all rise
-to 13492 exactly as a solo Spyro, with or without others standing beside
-it. Waiting on a savestate at the whirlwind.
+**Fixed in v0.10.4: the lift up to the Dark Hollow portal dropped riders**
+1/2 or 3/4 of the way up, varying run to run (user, with a savestate; not
+the whirlwind first suspected). The lift carries Spyro only while it updates
+with him live, and ownership is by distance with height included: once the
+rider was high enough, a dragon near the base became "nearer" and the lift
+moved to his pass. Reproduced headless from the savestate by forcing the
+lift's owner away mid-ride, which dropped the rider exactly so. A ridden moby
+(Spyro state 17, or ControlFlags bit 31, with m_mobyInUseBySpyro pointing at
+it) now belongs to its rider (`coop_mobys.c`, RIDES); with the owner forced
+away the whole ride now completes. One rider at a time: a second dragon
+walking on during a ride is not picked up until it ends.
 
 ### M5. In-game Multiplayer and Color menus: stages 1 to 3 BUILT; stage 4 blocked on the engine
 
