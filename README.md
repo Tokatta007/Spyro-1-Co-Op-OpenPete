@@ -3,10 +3,53 @@
 Split-screen co-op for **Spyro the Dragon**, built as a mod for
 [OpenPete](https://openpete.com/), the native PC port of the game.
 
-**Status: early. This does not play yet.** A second Spyro runs alongside the
-first, but he borrows player 1's controls and is not drawn yet. See
-[docs/PORTING.md](docs/PORTING.md) for the blockers and
-[docs/PORT-INVENTORY.md](docs/PORT-INVENTORY.md) for the plan.
+**Status: playable, 1 to 4 players, on one shared screen.** Split-screen
+needs multi-view rendering in OpenPete, so for now everyone shares one camera
+and the **P** key moves it from dragon to dragon. See
+[docs/PORTING.md](docs/PORTING.md) for what is still blocked and
+[BUGS.md](BUGS.md) for the details of everything below.
+
+## What works
+
+- Up to four dragons, each in their own color.
+- A **Multiplayer** page in the pause menu: number of players, respawn style,
+  and a Colors page where every player sets their own color.
+- Respawns: a dragon who dies respawns on his own with a crystal burst, while
+  the others play on. The original "everyone restarts" style is an option.
+- Flight levels: a dragon who crashes sits out while the others finish.
+- Enemies go after the nearest dragon, every dragon has his own Sparx, and
+  portals, lifts, whirlwinds, dragon rescues and the balloonist all work with
+  four.
+
+## Controls
+
+- **Player 1** uses the game's own controls, set up in OpenPete as usual.
+- **Players 2 to 4** share one controller for now, until OpenPete supports
+  more than one. Set "Players 2-4 controls" in the M overlay to *Controller*
+  (the default), or to *Copy player 1* to have every dragon follow player 1.
+
+To keep player 1 on the keyboard and the controller for the others, remove
+the controller entries from player 1's buttons in `openpete.toml`, so each
+button has one keyboard key and no `pad:` entry, for example:
+
+```toml
+[game.spyro-1.keys.pad]
+cross      = "K"
+square     = "J"
+triangle   = "I"
+circle     = "L"
+dpad_up    = "W"
+dpad_down  = "S"
+dpad_left  = "A"
+dpad_right = "D"
+start      = ["Return", "pad:start"]   # lets the controller pause too
+```
+
+## Known limits
+
+- **Turn frame interpolation off.** With it on, the extra dragons disappear
+  between frames.
+- One screen and one shared controller for players 2 to 4, as above.
 
 ## Different from the PS1 mod
 
