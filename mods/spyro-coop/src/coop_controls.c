@@ -94,6 +94,14 @@ uint32_t coop_controls_now(void) {
     return g_imgui_held;
 }
 
+/* One player's controller (player 0-based, 1..3). There is one controller
+   for players 2 to 4 until OpenPete feeds more, so every one of them gets
+   the same buttons; this is the one place that changes when it does. */
+uint32_t coop_controls_player(int player) {
+    (void)player;
+    return g_imgui_held;
+}
+
 /* Tick context: the extra players' buttons this tick. */
 uint32_t coop_controls_held(void) {
     uint32_t held = g_imgui_held;

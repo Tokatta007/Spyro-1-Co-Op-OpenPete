@@ -163,8 +163,8 @@ typedef struct {
     int32_t  cursor;        /* row on that page */
     uint32_t scratch_used;
     uint8_t  scratch[244];  /* strings and vectors the game reads by pointer */
-    int32_t  pad_cursor;    /* Colors page: the controller's cell (players 2-4) */
-    uint32_t pad_held;      /* the controller's buttons last frame, for presses */
+    int32_t  row[COOP_MAX_PLAYERS];      /* Colors page: players 2-4's own row, 0..3 */
+    uint32_t held[COOP_MAX_PLAYERS];     /* their buttons last frame, for presses */
 } CoopMenuArena;
 
 /* ------------------------------------------------------------------------
@@ -359,6 +359,7 @@ void coop_effects_draw(CPUState* cpu);   /* the star, from the scene composer's 
 void     coop_controls_sample(void);   /* present thread, every present */
 uint32_t coop_controls_held(void);     /* tick: the extra players' PS1 buttons */
 uint32_t coop_controls_now(void);      /* the same, any context, no bookkeeping */
+uint32_t coop_controls_player(int player);  /* player 1..3 (0-based): his buttons, any context */
 void     coop_controls_status(void);
 
 /* coop_flight.c */

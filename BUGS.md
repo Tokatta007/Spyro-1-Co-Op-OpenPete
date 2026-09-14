@@ -369,7 +369,7 @@ the native renderer's choice.
 For the author note: two Spyro model draws in one frame are not depth-ordered
 by the native renderer the way PsyCross orders them.
 
-### X2. Extra players' controls: one controller for players 2-4, v0.11.3, awaiting test
+### X2. Extra players' controls: one controller for players 2-4, v0.11.4, awaiting test
 
 OpenPete still never fills the game's second pad buffer (`docs/PORTING.md`,
 B1), so the mod reads the extra players' controller from the host and builds
@@ -420,3 +420,14 @@ openpete.toml. The pause menu is player 1's again; on the Colors page player
 other active players' columns (`coop_menu.c`, TWO CURSORS). Headless: the
 walk test still moves only player 1 with "Controller" and everyone with
 "Copy"; the Colors page draws.
+
+**v0.11.3 test:** the view swap and the second cursor worked; WASD did not.
+OpenPete keeps one keyboard key per game button ("the extra source is
+ignored"), so the arrows won, and WASD is also the keyboard stick's default.
+
+**v0.11.4:** WASD alone on the d-pad, the keyboard stick on the arrows (no
+key warnings at load). On the Colors page every extra player has his own
+cursor in his own column, fed by `coop_controls_player(p)`; with one
+controller they all move and change together until more controllers exist.
+ImGui merges every gamepad into one set of keys, so separate controllers per
+player will need OpenPete's multi-controller support, not this route.
