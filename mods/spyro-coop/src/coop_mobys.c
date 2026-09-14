@@ -147,6 +147,21 @@ static int portal_path_moby(unsigned n, int ns, uint8_t* slot) {
 #define CONTROL_SCRIPTED        0x80000000u
 #define SPYRO_STATE_RIDING      17
 
+/* SHARED LIFTS (2026-09-13, the user asked for everyone at once). The lift
+   and whirlwind code every homeworld shares (the riders in state 17, flags
+   0x80008000) serves one Spyro per update, so while one is ridden it also
+   runs in the pass of every other rider and of any dragon standing at its
+   foot, who can then step on too. It updates up to once per dragon near it:
+   its sound and swirl repeat, and its own "Spyro near" timer is refreshed
+   by each rider. Dragons away from it never get the extra pass, so the far
+   branch of that timer cannot switch it off mid-ride. Cannons set other
+   flags and stay one at a time. */
+#define LIFT_FOOT_REACH  0x1800      /* horizontal, from the lift's origin */
+#define LIFT_FOOT_HEIGHT 0x800
+
+static uint8_t g_extra_pass[MOBY_MAX];  /* bit k: also update in slot k's pass;
+                                           rebuilt by every assignment */
+
 static int ridden_moby(const uint8_t* spyro, uint32_t mobys_vaddr, unsigned n) {
     uint32_t flags = *(const uint32_t*)(spyro + SPYRO_OFF_CONTROL_FLAGS);
     uint32_t use   = *(const uint32_t*)(spyro + SPYRO_OFF_MOBY_IN_USE);
@@ -279,6 +294,21 @@ static unsigned assign_mobys(CoopMobyArena* M, Moby* mobys, uint32_t mobys_vaddr
         ride[k] = ridden_moby(coop_shadow(k).spyro, mobys_vaddr, n);
     for (int k = ns + 1; k < COOP_MAX_PLAYERS; k++)
         ride[k] = -1;
+
+    memset(g_extra_pass, 0, n);
+    for (int k = 0; k <= ns; k++) {
+        const uint8_t* sp = (k == 0) ? guest8(OP_GADDR_g_Spyro) : coop_shadow(k).spyro;
+        if (ride[k] < 0 || *(const int32_t*)(sp + SPYRO_OFF_STATE_M) != SPYRO_STATE_RIDING)
+            continue;                        /* only lifts: see SHARED LIFTS */
+        const Vector3D* at = &mobys[ride[k]].m_Position;
+        for (int j = 0; j <= ns; j++) {
+            int64_t dx = (int64_t)pos[j][0] - at->x; if (dx < 0) dx = -dx;
+            int64_t dy = (int64_t)pos[j][1] - at->y; if (dy < 0) dy = -dy;
+            int64_t dz = (int64_t)pos[j][2] - at->z; if (dz < 0) dz = -dz;
+            if (ride[j] == ride[k] || (dx + dy < LIFT_FOOT_REACH && dz < LIFT_FOOT_HEIGHT))
+                g_extra_pass[ride[k]] |= (uint8_t)(1u << j);
+        }
+    }
     /* Each ridden moby's rider: its previous owner if he is one, else the
        first. Settled before the loop so a podmate earlier in the array
        follows it too. */
@@ -466,7 +496,8 @@ static void on_list_builder(CPUState* cpu) {
                since, or outside the array, is left alone. */
             if (idx < g_assigned_n && (moby - mobys_vaddr) % sizeof(Moby) == 0) {
                 uint8_t owner = M->owner[idx];
-                drop = (owner < COOP_MAX_PLAYERS && owner != (uint8_t)keep_owner);
+                drop = (owner < COOP_MAX_PLAYERS && owner != (uint8_t)keep_owner &&
+                        !(g_extra_pass[idx] & (1u << keep_owner)));
             }
         }
         if (drop)

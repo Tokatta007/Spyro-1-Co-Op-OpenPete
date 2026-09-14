@@ -176,8 +176,14 @@ moved to his pass. Reproduced headless from the savestate by forcing the
 lift's owner away mid-ride, which dropped the rider exactly so. A ridden moby
 (Spyro state 17, or ControlFlags bit 31, with m_mobyInUseBySpyro pointing at
 it) now belongs to its rider (`coop_mobys.c`, RIDES); with the owner forced
-away the whole ride now completes. One rider at a time: a second dragon
-walking on during a ride is not picked up until it ends.
+away the whole ride now completes.
+
+v0.10.5, at the user's request: everyone can ride at once. A lift being
+ridden (state 17) also updates in the pass of every other rider and of any
+dragon at its foot, so they step on too (`coop_mobys.c`, SHARED LIFTS).
+Headless from the savestate, two dragons rode up together and one took the
+Dark Hollow portal. The lift's sound and sparkles repeat per rider. Cannons
+use other flags and are left one at a time.
 
 ### M5. In-game Multiplayer and Color menus: stages 1 to 3 BUILT; stage 4 blocked on the engine
 
