@@ -91,6 +91,13 @@ and the dust ring. Everything but the dust ring was coming out of the top of
 Spyro's head; an "Effect height" slider now sets where they start, default
 -200 from his position.
 
+**v0.9.2:** the colour flash is gone, and the rescue star is a new layer: the
+flat star that grows out of a frozen dragon when Spyro touches it, drawn with
+the rescue's own renderer and animation (`coop_effects.c`). The default mix is
+now crystal burst, orange sparks, white sparks, dust ring, smoke puff and the
+star, at height -300. Seen in the native renderer headless
+(`shots/rescue-star-v092.png`).
+
 The user's crystal-dragon idea as a whole is not possible: the crystal's
 shake is its own moby's animation, and spawning that moby starts the rescue
 cutscene. Once one is chosen, the bench's extra options and key can go.

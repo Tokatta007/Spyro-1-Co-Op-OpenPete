@@ -174,6 +174,7 @@ void coop_tint_state(void) {
 static void on_glows_and_sparkles(CPUState* cpu) {
     if (!g_p2_drawn_this_scene && p2_draw_wanted(coop_arena()))
         draw_player2(cpu);
+    coop_effects_draw(cpu);                  /* the respawn star, if one is playing */
     g_p2_drawn_this_scene = 0;
     g_api->base(cpu);
 }

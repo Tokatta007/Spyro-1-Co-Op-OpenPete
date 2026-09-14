@@ -37,6 +37,8 @@
 
 #include "coop.h"
 
+static int32_t lift(void);
+
 #define SPARX_FREE_SLOTS_NEEDED 0x15   /* the level's own check before a spawn */
 #define FRAGMENT_CLASS  251
 #define FRAGMENT_COUNT  10
@@ -51,7 +53,7 @@ const char* const k_fx_layer_names[FX_LAYER_COUNT] = {
     "White sparks",
     "Dust ring",
     "Smoke puff",
-    "Colour flash (player's colour)",
+    "Rescue star",
 };
 
 /* ------------------------------------------------------------------------
@@ -104,26 +106,6 @@ static void dust_ring(CPUState* cpu) {
     }
 }
 
-/* The gem pop, in the player's colour (his own purple if he has none). It
-   reads a Moby: a zeroed one with the position at +0xC and class 0x22 at
-   +0x36, which makes it copy the position and skip the rotation matrix. */
-static void colour_flash(CPUState* cpu, int person) {
-    CoopFxArena* F = FX();
-    const uint8_t* c = g_settings.color[person & 3];
-    uint8_t rgb[3] = { 0x78, 0x58, 0xA8 };
-    if (c[3] != 0)
-        memcpy(rgb, c, 3);
-    uint8_t* m = F->scratch + 16;
-    memset(m, 0, 0x58);
-    const int32_t* pos = guest32(OP_GADDR_g_Spyro + SPYRO_OFF_POSITION);
-    int32_t v[3] = { pos[0], pos[1], pos[2] + lift() };
-    memcpy(m + 0x0C, v, sizeof v);
-    int16_t cls = 0x22;
-    memcpy(m + 0x36, &cls, 2);
-    uint32_t colour = (uint32_t)rgb[0] | ((uint32_t)rgb[1] << 8) | ((uint32_t)rgb[2] << 16);
-    particle(cpu, 2, 12, scratch(offsetof(CoopFxArena, scratch) + 16), colour);
-}
-
 /* Levels whose code knows class 251: every homeworld and normal level. */
 static int level_has_fragments(int32_t level) {
     int world = level / 10, n = level % 10;
@@ -166,6 +148,76 @@ static int crystal_burst(CPUState* cpu) {
 }
 
 /* ------------------------------------------------------------------------
+ * THE RESCUE STAR (2026-09-13, at the user's request): the flat star that
+ * grows out of a frozen dragon when Spyro touches it.
+ *
+ * It is ONE global, D_80076248 (dragon.h): +0x0 on, +0x4 position, +0x10 a
+ * matrix, +0x24 size, +0x28 a rotation (+0x2A the spin), +0x2B brightness.
+ * func_80058864 draws it, semi-transparent triangles into the HUD ordering
+ * table, after RotVec8ToMatrix combines the rotation with the camera's
+ * projection. Retail calls those only from the rescue's draw (gamestate 8),
+ * and animates it in the rescue's update, func_8002F3E4 at 0x8002F494: over
+ * 32 ticks the size is t * 16, the brightness t * 4 + 0x40, and the spin
+ * grows. Here the same values are set each tick, then played backwards to
+ * close it, and it is drawn from the gameplay scene; the struct is switched
+ * off again after each draw so the rescue never finds it on.
+ * ---------------------------------------------------------------------- */
+#define STAR_GROW_TICKS 32
+
+static void star_start(void) {
+    CoopFxArena* F = FX();
+    const int32_t* pos = guest32(OP_GADDR_g_Spyro + SPYRO_OFF_POSITION);
+    F->star_pos[0] = pos[0];
+    F->star_pos[1] = pos[1];
+    F->star_pos[2] = pos[2] + lift();
+    F->star_tick = 1;
+}
+
+static void star_advance(void) {
+    CoopFxArena* F = FX();
+    if (F->star_tick <= 0)
+        return;
+    if (++F->star_tick > STAR_GROW_TICKS * 2)
+        F->star_tick = 0;
+}
+
+void coop_effects_draw(CPUState* cpu) {
+    CoopFxArena* F = FX();
+    if (F->star_tick <= 0 || coop_gamestate() != GS_PLAYING)
+        return;
+    uint32_t tick = g_stats.camera_gameplay;
+    if (F->star_drawn_tick == tick)
+        return;                              /* once per tick, as the extra dragons */
+    F->star_drawn_tick = tick;
+
+    int t = F->star_tick;
+    int grow = (t <= STAR_GROW_TICKS) ? t : STAR_GROW_TICKS * 2 - t;   /* up, then back down */
+
+    uint8_t* star = guest8(OP_GADDR_D_80076248);
+    int32_t on = 1, size = grow * 16;
+    int bright = grow * 4 + 0x40;
+    memcpy(star + 0x00, &on, 4);
+    memcpy(star + 0x04, F->star_pos, 12);
+    memcpy(star + 0x24, &size, 4);
+    star[0x28] = 0;
+    star[0x29] = 0;
+    star[0x2A] = (uint8_t)(t * 4);
+    star[0x2B] = (uint8_t)(bright > 255 ? 255 : bright);
+
+    SavedRegs r;
+    save_regs(cpu, &r);
+    cpu->a0 = OP_GADDR_D_80076248 + 0x28;
+    cpu->a1 = OP_GADDR_D_80076248 + 0x10;
+    cpu->a2 = OP_GADDR_g_Camera;             /* m_ProjectionMatrix, at +0 */
+    g_api->call(cpu, OP_FNADDR_RotVec8ToMatrix);
+    g_api->call(cpu, OP_FNADDR_func_80058864);
+    load_regs(cpu, &r);
+
+    on = 0;
+    memcpy(star + 0x00, &on, 4);
+}
+
+/* ------------------------------------------------------------------------
  * The effects
  * ---------------------------------------------------------------------- */
 
@@ -181,7 +233,8 @@ void coop_effect_play(CPUState* cpu, int layers, int person) {
     if (layers & (1 << FX_WHITE_SPARKS))  white_sparks(cpu);
     if (layers & (1 << FX_DUST_RING))     dust_ring(cpu);
     if (layers & (1 << FX_SMOKE))         smoke(cpu);
-    if (layers & (1 << FX_COLOUR_FLASH))  colour_flash(cpu, person);
+    if (layers & (1 << FX_STAR))          star_start();
+    (void)person;
     load_regs(cpu, &r);
     g_stats.effects_played++;
 }
@@ -194,6 +247,7 @@ void coop_effects_tick(CPUState* cpu) {
     uint32_t down = g_api->binding_down(g_self, "test_respawn_effect") ? 1u : 0u;
     int pressed = down && !F->test_key_down;
     F->test_key_down = down;
+    star_advance();
     if (!pressed)
         return;
     coop_effect_play(cpu, g_settings.respawn_effects, coop_physical_player(0));
