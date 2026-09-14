@@ -70,15 +70,22 @@ void coop_pad_status(void) {
 #define PAD_TYPE_DIGITAL   0x41
 #define PAD_TYPE_DUALSHOCK 0x73
 
+/* KEYED TO THE CONTROLS SETTING, NOT THE PLAYER COUNT (v0.11.5). Changing the
+   pad's type is not free: when the game sees a digital pad turn back into a
+   DualShock it recalibrates, and PadCaliReset clears m_Held, so a button
+   still held reads as a fresh press on the next frame. Tied to "players >= 2"
+   as it first was, stepping PLAYERS onto 1 in the Multiplayer menu flipped
+   the type while the arrow key was down, and the step ran twice: 4 went to 2
+   (seen by the user). The setting only changes from the M panel's mouse. */
 static void player1_pad_rules(void) {
-    if (!coop_enabled() || g_settings.extra_controls != EXTRA_CONTROLS_CONTROLLER)
+    if (g_settings.extra_controls != EXTRA_CONTROLS_CONTROLLER)
         return;
     uint8_t* buf = guest8(OP_GADDR_g_PadBuffer);
     if (buf[PADBUF_STATUS] != 0)
         return;                              /* nothing connected */
     if (buf[PADBUF_TYPE] == PAD_TYPE_DUALSHOCK)
         buf[PADBUF_TYPE] = PAD_TYPE_DIGITAL;
-    if (coop_gamestate() != GS_PLAYING && coop_gamestate() != GS_PAUSED) {
+    if (coop_enabled() && coop_gamestate() != GS_PLAYING && coop_gamestate() != GS_PAUSED) {
         uint32_t extra = coop_controls_now() & 0xFFFFu;
         uint32_t held  = ~(((uint32_t)buf[PADBUF_BUTTONS] << 8) | buf[PADBUF_BUTTONS + 1]) & 0xFFFFu;
         held |= extra;

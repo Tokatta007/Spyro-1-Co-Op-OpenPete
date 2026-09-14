@@ -369,7 +369,7 @@ the native renderer's choice.
 For the author note: two Spyro model draws in one frame are not depth-ordered
 by the native renderer the way PsyCross orders them.
 
-### X2. Extra players' controls: one controller for players 2-4, v0.11.4, awaiting test
+### X2. Extra players' controls: one controller for players 2-4, v0.11.5, confirmed in play (one controller)
 
 OpenPete still never fills the game's second pad buffer (`docs/PORTING.md`,
 B1), so the mod reads the extra players' controller from the host and builds
@@ -431,3 +431,11 @@ cursor in his own column, fed by `coop_controls_player(p)`; with one
 controller they all move and change together until more controllers exist.
 ImGui merges every gamepad into one set of keys, so separate controllers per
 player will need OpenPete's multi-controller support, not this route.
+
+**v0.11.4 test: all working** (WASD, the per-player Colors cursors, input
+following the player through a view swap). One bug: stepping PLAYERS onto 1
+stepped twice (4 -> 2). Hiding the stick was tied to "players >= 2", so
+landing on 1 turned player 1's pad back into a DualShock mid-press; the
+game recalibrates on that change and PadCaliReset clears m_Held, so the held
+key read as a new press. **v0.11.5** keys it to the controls setting alone.
+Headless, the same 15-frame press: 4 -> 2 before, 4 -> 1 after.
