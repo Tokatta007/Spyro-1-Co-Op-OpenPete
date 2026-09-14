@@ -272,7 +272,7 @@ follow their dragons across the view key. Cause and fix: OpenPete's native
 rebuild of Spyro takes one color per renderer call, from the last dragon drawn
 in it, so every extra dragon is its own call, drawn before the camera's dragon.
 
-### C3. Spyro is purple in a dragon's dialogue: FIXED in v0.12.0, awaiting play
+### C3. Spyro is purple in a dragon's dialogue: FIXED in v0.12.0, confirmed by the user
 
 The Spyro in a dragon rescue cutscene is not g_Spyro but a moby of class 511
 (`g_DragonCutscene + 0x8C` points at it), so the color filter written into
@@ -302,6 +302,18 @@ uniform block per frame for every Spyro draw, and has no per-instance refine,
 so every dragon would wear the same color. The cutscene Spyro (moby channel,
 per instance) could use it today. Needed from the engine: a per-instance key
 on the player channel, so each Spyro draw can get its own block.
+
+**User's review of the experiment (2026-09-14):** looks surprisingly good,
+but the nose, the cheeks, the edge where the body meets the yellow belly, and
+probably the underside of the tail stay gray (the same areas were awkward on
+PS1). Likely cause: Spyro's colors are blended across each face, so where a
+purple corner meets a yellow one the colors in between pass through gray.
+Those pixels have too little saturation, or a hue outside the purple range,
+and the hue test leaves them stock. The cheeks and nose may also be a paler
+lavender. To try when this comes back: grade the recolor by how purple a
+pixel is along the purple-to-yellow axis, rather than an on/off hue window,
+so blend pixels get a matching share of the new color. The rest is kept for
+the next message to the OpenPete author.
 
 ### M3. Sounds from player 2's side: BUILT in v0.4.2, awaiting test
 
