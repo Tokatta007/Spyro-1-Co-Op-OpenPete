@@ -183,12 +183,56 @@ static void on_glows_and_sparkles(CPUState* cpu) {
 
 static void on_spyro_model(CPUState* cpu);
 
+/* ------------------------------------------------------------------------
+ * RESCUE (2026-09-14). In a dragon rescue the Spyro on screen is not g_Spyro
+ * but a moby of class 511 (g_DragonCutscene + 0x8C points at it; measured
+ * headless, with materials painting classes 510 and 511 in two colors), so
+ * the color filter written above never reaches him and he talked in purple.
+ * OpenPete's materials repaint the engine's own draws: this one mixes class
+ * 511 toward a player's color exactly as the game's filter does, with the
+ * color chosen per instance by the refine callback.
+ *
+ * WHOSE COLOR. The rescuer's. Whoever touched the statue started the
+ * sequence in his own tick, and a shadow who does so is handed over, which
+ * trades the person table, so for the whole cutscene slot 0 holds the
+ * rescuer (coop_players.c, handover). With co-op off that is player 1.
+ * ---------------------------------------------------------------------- */
+#define CUTSCENE_SPYRO_CLASS 511
+
+static int rescue_tint_refine(const openpete_mod_material_key_t* key, void* out, uint32_t cap) {
+    (void)key;
+    const uint8_t* c = g_settings.color[coop_physical_player(0)];
+    if (c[3] == 0 || cap < 16)
+        return -1;                           /* strength 0: the stock look */
+    float block[4] = { c[0] / 255.0f, c[1] / 255.0f, c[2] / 255.0f, c[3] / 255.0f };
+    memcpy(out, block, sizeof block);
+    return (int)sizeof block;
+}
+
+static void install_rescue_tint(void) {
+    if (g_api->api_version < 4) {
+        coop_log(OP_MOD_LOG_WARN, "rescue tint needs OpenPete mod api 4; Spyro stays purple in rescues");
+        return;
+    }
+    int frag = g_api->shader_register(g_self, "shaders/spyro_tint.frag");
+    if (frag < 0) {
+        coop_log(OP_MOD_LOG_WARN, "rescue tint shader did not compile; see .build/shaders");
+        return;
+    }
+    openpete_mod_material_selector_t sel = openpete_mod_material_sel_any();
+    sel.channel    = OP_CHAN_MOBY;
+    sel.moby_class = CUTSCENE_SPYRO_CLASS;
+    if (g_api->material_register_refine(g_self, &sel, frag, rescue_tint_refine) < 0)
+        coop_log(OP_MOD_LOG_WARN, "rescue tint material refused");
+}
+
 int coop_draw_install(void) {
     if (g_api->override_name(g_self, "func_80058BA8", on_glows_and_sparkles) != 0 ||
         g_api->override_name(g_self, "func_80023AC4", on_spyro_model) != 0) {
         coop_log(OP_MOD_LOG_ERROR, "could not install the player 2 draw");
         return 1;
     }
+    install_rescue_tint();
     return 0;
 }
 

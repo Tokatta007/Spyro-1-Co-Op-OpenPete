@@ -272,21 +272,36 @@ follow their dragons across the view key. Cause and fix: OpenPete's native
 rebuild of Spyro takes one color per renderer call, from the last dragon drawn
 in it, so every extra dragon is its own call, drawn before the camera's dragon.
 
-### C3. Spyro is purple in a dragon's dialogue: MOD SIDE after all, not researched yet
+### C3. Spyro is purple in a dragon's dialogue: FIXED in v0.12.0, awaiting play
 
-Measured 2026-09-13 (v0.5.3 diagnostic). During a dragon rescue the model
-renderer was called from three sites, `0x8001D180`, `0x8001D4B8` and
-`0x8001D5D4`, every time with the player's filter going in (`9700FF00`,
-green) and the retail renderer's GTE far color coming out green. The user
-still saw purple in the conversation. So the mod's color reaches the game's
-renderer, and OpenPete's native rebuild of Spyro does not apply the filter in
-these scenes, although it does in gameplay and the portal sequences. Nothing
-the mod can reach; include it in the note to the OpenPete author.
+The Spyro in a dragon rescue cutscene is not g_Spyro but a moby of class 511
+(`g_DragonCutscene + 0x8C` points at it), so the color filter written into
+g_Spyro never reached him. Found headless by painting classes 510 and 511 in
+two colors with materials during a rescue: 511 is Spyro, 510 the dragon.
 
-**Update 2026-09-14:** the Spyro in a dragon cutscene is not g_Spyro but a
-moby, `g_DragonCutscene.m_CutsceneSpyro` (dragon.h), so the filter written
-into g_Spyro never reaches it. Tinting it means finding how a moby's colors
-can be changed; mobys have no color-filter field.
+The fix is an OpenPete material (`shaders/spyro_tint.frag`, registered in
+`coop_draw.c`, RESCUE) on class 511, whose refine callback returns the
+rescuer's color: the player in slot 0 during the cutscene, since a shadow who
+touches a statue is handed over. The shader scales the color by each pixel's
+brightness before mixing, since a flat mix erased all shading at full
+strength. Headless: player 1 rescuing gave a green Spyro, player 2 (moved
+onto player 1's path) a red one, both shaded like the gameplay dragons.
+
+### C4. Color only the purple parts of Spyro: POSSIBLE, needs an engine feature for per-player colors
+
+The user asked whether the tint could leave horns, wings and belly their own
+color. The PS1 attempt failed because the model's color palette encodes
+lighting, not material. A material shader sees each pixel's final color
+instead, and a hue test separates the parts cleanly: headless, with the
+filter off, purple pixels went green while horns (gold), crest (orange), wing
+membranes (red), belly and eyes stayed stock, on both the gameplay Spyro and
+the cutscene Spyro. The shader is kept in `docs/experiments/purple_only.frag`.
+
+The blocker is per-player color in gameplay: the "player" channel takes one
+uniform block per frame for every Spyro draw, and has no per-instance refine,
+so every dragon would wear the same color. The cutscene Spyro (moby channel,
+per instance) could use it today. Needed from the engine: a per-instance key
+on the player channel, so each Spyro draw can get its own block.
 
 ### M3. Sounds from player 2's side: BUILT in v0.4.2, awaiting test
 
