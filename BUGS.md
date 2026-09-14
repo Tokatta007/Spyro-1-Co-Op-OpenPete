@@ -272,7 +272,7 @@ follow their dragons across the view key. Cause and fix: OpenPete's native
 rebuild of Spyro takes one color per renderer call, from the last dragon drawn
 in it, so every extra dragon is its own call, drawn before the camera's dragon.
 
-### C3. Spyro is purple in a dragon's dialogue: ENGINE SIDE, for the author
+### C3. Spyro is purple in a dragon's dialogue: MOD SIDE after all, not researched yet
 
 Measured 2026-09-13 (v0.5.3 diagnostic). During a dragon rescue the model
 renderer was called from three sites, `0x8001D180`, `0x8001D4B8` and
@@ -282,6 +282,11 @@ still saw purple in the conversation. So the mod's color reaches the game's
 renderer, and OpenPete's native rebuild of Spyro does not apply the filter in
 these scenes, although it does in gameplay and the portal sequences. Nothing
 the mod can reach; include it in the note to the OpenPete author.
+
+**Update 2026-09-14:** the Spyro in a dragon cutscene is not g_Spyro but a
+moby, `g_DragonCutscene.m_CutsceneSpyro` (dragon.h), so the filter written
+into g_Spyro never reaches it. Tinting it means finding how a moby's colors
+can be changed; mobys have no color-filter field.
 
 ### M3. Sounds from player 2's side: BUILT in v0.4.2, awaiting test
 
