@@ -26,7 +26,7 @@
 [mod]
 id      = "spyro-coop"
 name    = "Spyro Co-Op"
-version = "0.12.3"
+version = "0.12.4"
 game    = "spyro-1"
 api     = 4          # 12 for players 2-4's own controllers; older engines copy player 1
 

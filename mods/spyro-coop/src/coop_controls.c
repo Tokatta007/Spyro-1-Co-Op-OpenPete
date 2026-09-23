@@ -25,8 +25,21 @@
 #include "coop.h"
 #include <stdio.h>
 
-/* A PSX pad reports 1 for RELEASED; the game's own decode inverts it. */
+/* A PSX pad reports 1 for RELEASED; the game's own decode inverts it.
+ *
+ * AND THE TWO HALVES SWAP. pad_read hands back the wire's own word, whose
+ * low byte is libpad's low button byte (select, start, d-pad) and whose high
+ * byte is the face and shoulder buttons: up is 0x0010, square 0x8000. The
+ * game composes its own held word the other way round - the same two bytes,
+ * high first - so up is 0x1000 and square 0x0080 (PADB_* in coop_players.c,
+ * PAD_* in the decompilation's gamepad.h). Everything in this mod speaks the
+ * game's layout, so the swap happens here, once, at the source. Without it
+ * every extra player's d-pad arrived as face buttons: pressing up flamed. */
 #define PAD_BUTTONS_MASK 0xFFFFu
+
+static uint32_t to_game_layout(uint32_t wire) {
+    return ((wire << 8) | (wire >> 8)) & 0xFFFFu;
+}
 
 static int g_have_pads = -1;      /* -1 not asked yet, 0 too old, 1 usable */
 static int g_slot_seen[COOP_MAX_PLAYERS];   /* logged once per slot */
@@ -66,7 +79,7 @@ static int read_slot(int slot, CoopPad* out) {
         return 0;
 
     out->present = pad.present != 0;
-    out->held    = (~pad.buttons) & PAD_BUTTONS_MASK;
+    out->held    = to_game_layout((~pad.buttons) & PAD_BUTTONS_MASK);
     out->stick_x = pad.axes[0];
     out->stick_y = pad.axes[1];
 #endif

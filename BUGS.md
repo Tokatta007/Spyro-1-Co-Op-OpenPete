@@ -567,6 +567,29 @@ marker on whichever slot is pressing something, and logs once per slot that
 has a device. Finding your own controller is then a matter of pressing a
 button and reading the list.
 
+**v0.12.4: the halves were swapped.** `pad_read` hands back the wire's own
+button word - low byte select, start and the d-pad, high byte the face and
+shoulder buttons, so up is 0x0010 and square 0x8000. The game composes its
+held word the other way round (PADB_* in `coop_players.c`: up 0x1000, square
+0x0080), and the mod was feeding one straight into the other, so every extra
+player's d-pad arrived as face buttons - pressing up flamed. One swap at the
+source in `coop_controls.c` fixes input, the Colors-page cursors and the
+menu merge together. Headless: with both players holding up, player 2 now
+walks forward beside player 1 to the same wall (84053,54373 and
+84470,54357); before, he stood still.
+
+Also in v0.12.4: in gameplay only START is merged into player 1's buttons
+(the rest belong to the extra player's own dragon), so any controller can
+call a halt without a `pad:start` binding. Outside gameplay the whole set is
+merged as before, and the slot-0 staging errors the engine logged for those
+frames are gone with it.
+
+**A workaround for one controller, until then:** the slots follow SDL's
+enumeration order, and `SDL_JOYSTICK_HIDAPI=0` changes it. On the user's
+machine the order becomes mouse, DualSense, keyboard, which should put the
+controller in slot 1 - player 2's. `D:\Games\OpenPete-v04\play-coop.bat`
+sets it.
+
 **The ask for the author:** a way to say which device is which pad slot -
 even just "player 1 is the keyboard, give the pads to slots 1 and up", or
 skipping devices that are really a keyboard or a mouse. Without it, one

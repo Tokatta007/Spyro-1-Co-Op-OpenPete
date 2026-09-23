@@ -68,6 +68,7 @@ void coop_pad_status(void) {
 #define PADBUF_STATUS  0
 #define PADBUF_TYPE    1
 #define PADBUF_BUTTONS 2          /* two bytes, big end first, active low */
+#define PAD_START          0x0800u   /* in the game's own layout (coop_controls.c) */
 #define PAD_TYPE_DIGITAL   0x41
 #define PAD_TYPE_DUALSHOCK 0x73
 
@@ -86,9 +87,21 @@ static void player1_pad_rules(void) {
         return;                              /* nothing connected */
     if (buf[PADBUF_TYPE] == PAD_TYPE_DUALSHOCK)
         buf[PADBUF_TYPE] = PAD_TYPE_DIGITAL;
-    if (coop_enabled() && coop_gamestate() != GS_PLAYING && coop_gamestate() != GS_PAUSED) {
-        uint32_t extra = coop_controls_player(1) & 0xFFFFu;   /* player 2's pad */
-        uint32_t held  = ~(((uint32_t)buf[PADBUF_BUTTONS] << 8) | buf[PADBUF_BUTTONS + 1]) & 0xFFFFu;
+    if (!coop_enabled())
+        return;
+
+    /* Outside gameplay (dialogue, level results) every extra player's buttons
+       are added to player 1's, so anyone can answer. In gameplay only START
+       is, so anyone can call a halt; the rest of the buttons belong to his own
+       dragon. The pause menu itself stays player 1's, as the user asked. */
+    int in_play = coop_gamestate() == GS_PLAYING || coop_gamestate() == GS_PAUSED;
+    uint32_t extra = 0;
+    for (int p = 1; p < COOP_MAX_PLAYERS; p++)
+        extra |= coop_controls_player(p) & 0xFFFFu;
+    if (in_play)
+        extra &= PAD_START;
+    if (extra) {
+        uint32_t held = ~(((uint32_t)buf[PADBUF_BUTTONS] << 8) | buf[PADBUF_BUTTONS + 1]) & 0xFFFFu;
         held |= extra;
         buf[PADBUF_BUTTONS]     = (uint8_t)(~held >> 8);
         buf[PADBUF_BUTTONS + 1] = (uint8_t)~held;

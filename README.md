@@ -43,6 +43,11 @@ and some keyboards and mice announce themselves as gamepads, so the M overlay
 lists what each slot is doing and lets you say which slot each player reads.
 Hold a button and watch the list to find yours.
 
+If your only controller lands in slot 0, it is player 1's and no mod can
+reach it. The slots follow SDL's own order, so launching with the
+environment variable `SDL_JOYSTICK_HIDAPI=0` set can reorder them and push
+the controller down to slot 1, where player 2 can have it.
+
 To keep player 1 on the keyboard while the controllers play the others, give
 each of his buttons one keyboard key and no `pad:` entry in `openpete.toml`,
 for example:
