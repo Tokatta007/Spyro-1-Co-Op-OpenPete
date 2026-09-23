@@ -123,7 +123,6 @@ static void on_pad_vsync(CPUState* cpu) {
     coop_settings_tick();
     coop_tint_state();                       /* every frame, menus and sequences included */
     coop_rumble_vbl();                       /* each extra pad's motors */
-    coop_sound_test_tick(cpu);               /* the panel's "play it now" */
     if (coop_arena()->swapped) {
         g_stats.padvsync_in_swap++;
         if (g_stats.padvsync_in_swap == 1)

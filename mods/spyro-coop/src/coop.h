@@ -290,7 +290,6 @@ typedef struct {
     int     split_vertical;  /* 1 vertical, 0 horizontal; no effect until split-screen exists */
     uint8_t color[COOP_MAX_PLAYERS][4]; /* per player: red, green, blue, strength */
     int     extra_controls;  /* EXTRA_CONTROLS_* */
-    int     respawn_sound;   /* index into k_respawn_sounds, 0 = silent */
     int     pad_slot[COOP_MAX_PLAYERS]; /* per player: which host pad slot he plays
                                            on, 1..3 (player 1's is the game's own,
                                            entry 0 unused). Which physical pad
@@ -366,14 +365,6 @@ int  coop_menu_install(uint32_t menu_vaddr);
 int  coop_menu_drawing_preview(void);  /* the Colors page is drawing a preview dragon */
 
 /* coop_effects.c */
-/* The respawn sound, chosen from the game's own table (coop_effects.c). */
-typedef struct { const char* name; int index; } CoopSound;
-extern const CoopSound k_respawn_sounds[];
-extern const int       k_respawn_sound_count;
-void coop_sound_play_table(CPUState* cpu, int table_index);  /* tick only */
-void coop_sound_test_request(void);   /* the M panel's "play it now" */
-void coop_sound_test_tick(CPUState* cpu);
-
 void coop_effects_init(uint32_t fx_vaddr);
 void coop_effect_play(CPUState* cpu, int layers, int person);
 void coop_effects_tick(CPUState* cpu);   /* the rescue star's clock */

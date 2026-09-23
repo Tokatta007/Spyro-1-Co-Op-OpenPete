@@ -105,7 +105,7 @@ cutscene.
 **v0.11.0:** the mix is final. The bench is gone: no O key, no layer boxes or
 height slider; a respawn always plays every layer at -300.
 
-### M9. A respawn sound: BUILT (v0.12.6), the sound itself is the user's to pick
+### M9. A respawn sound: DONE (v0.12.7), dragonFlash
 
 User request 2026-09-22, after the controllers were working: "I feel like we
 need a respawn sound every time a player respawns. The effects are perfect,
@@ -118,13 +118,12 @@ The game keeps its sounds in a table of ids (the decompilation's
 a respawn now plays one the same way: `PlaySound(id, NULL, 16, NULL)`, 2D and
 unconditional, from `coop_effect_play`.
 
-Which one is a question for ears, not for reading, so "Respawn sound" in the
-M panel lists the twelve that could pass for an arrival - inventory swoosh
-(the closest thing to the memory card sound), menu sound, titlescreen move,
-exit vortex, whirlwind, Spyro stars, dragon flash, moby poof, Spyro unsquish,
-the rescue sound, the windy loop, and None - with a "Play it now" button so
-the choice can be made without dying for it. The default is the inventory
-swoosh. The choice saves as `respawn_sound`.
+Which one was a question for ears, not for reading, so v0.12.6 put twelve
+candidates in the M panel with a "Play it now" button. The user picked
+**dragonFlash** (table entry 51, the flash as a dragon comes out of his
+crystal) first try, and v0.12.7 hardcodes it and takes the bench out again:
+no combo, no button, no `respawn_sound` setting. Old settings files naming
+one are ignored, as every unknown key is.
 
 The same request dropped the crystal burst from the respawn mix: it is the
 dragon's own crystal breaking, and beside a respawn sound it read as a second

@@ -210,47 +210,22 @@ void coop_effects_draw(CPUState* cpu) {
  * The effects
  * ---------------------------------------------------------------------- */
 
-/* THE RESPAWN SOUND (v0.12.6, the user's request: "a slow fwosh ... it might
-   be the slowed down version of one of the main menu sounds"). The game keeps
-   its sounds in a table of ids indexed by g_Spu.m_SoundTable, named in the
-   decompilation's sound_table.h; these are the ones that could pass for an
-   arrival. The M panel picks, so the choice can be made by ear in play. */
-const CoopSound k_respawn_sounds[] = {
-    { "None",                 -1 },
-    { "Inventory swoosh",     56 },
-    { "Menu sound",           44 },
-    { "Titlescreen move",     55 },
-    { "Exit vortex",          26 },
-    { "Whirlwind",            54 },
-    { "Spyro stars",          27 },
-    { "Dragon flash",         51 },
-    { "Moby poof",            38 },
-    { "Spyro unsquish",       32 },
-    { "Rescue sound",         48 },
-    { "Windy loop (0x39)",    57 },
-};
-const int k_respawn_sound_count = (int)(sizeof k_respawn_sounds / sizeof k_respawn_sounds[0]);
-
+/* THE RESPAWN SOUND (v0.12.7). The user asked for "a slow fwosh" to go with
+   the arrival effects and picked it by ear from the game's own sound table
+   (the decompilation's sound_table.h names them): dragonFlash, entry 51, the
+   flash when a dragon comes out of his crystal. It plays the way the pause
+   menu's chime does, PlaySound(id, NULL, 16, NULL) - 2D and unconditional,
+   so a respawn across the level is as loud as one at your feet. */
+#define SND_RESPAWN     51             /* sound table: dragonFlash */
 #define SPU_SOUND_TABLE 0x2CC          /* g_Spu.m_SoundTable, a guest pointer */
 
-/* One sound from the table, 2D and unconditional, the way the pause menu's
-   own chime plays (PlaySound(id, NULL, 16, NULL)). */
-void coop_sound_play_table(CPUState* cpu, int table_index) {
-    if (table_index < 0)
-        return;
+static void respawn_sound(CPUState* cpu) {
     uint32_t table = *(uint32_t*)g_api->guest(OP_GADDR_g_Spu + SPU_SOUND_TABLE);
     if (table == 0)
         return;
     SavedRegs r;
     save_regs(cpu, &r);
-    uint32_t id = *guest8(table + (uint32_t)table_index);
-    static int said;
-    if (!said) {
-        said = 1;
-        coop_log(OP_MOD_LOG_INFO, "respawn sound: table entry %d is sound id %u",
-                 table_index, id);
-    }
-    cpu->a0 = id;
+    cpu->a0 = *guest8(table + SND_RESPAWN);
     cpu->a1 = 0;
     cpu->a2 = 16;
     cpu->a3 = 0;
@@ -258,27 +233,10 @@ void coop_sound_play_table(CPUState* cpu, int table_index) {
     load_regs(cpu, &r);
 }
 
-static int g_sound_test;      /* the panel asked to hear it; host state, display only */
-
-void coop_sound_test_request(void) { g_sound_test = 1; }
-
-void coop_sound_test_tick(CPUState* cpu) {
-    if (!g_sound_test)
-        return;
-    g_sound_test = 0;
-    int pick = g_settings.respawn_sound;
-    if (pick > 0 && pick < k_respawn_sound_count)
-        coop_sound_play_table(cpu, k_respawn_sounds[pick].index);
-}
-
 void coop_effect_play(CPUState* cpu, int layers, int person) {
     if (coop_gamestate() != GS_PLAYING || layers == 0)
         return;
-    {
-        int pick = g_settings.respawn_sound;
-        if (pick > 0 && pick < k_respawn_sound_count)
-            coop_sound_play_table(cpu, k_respawn_sounds[pick].index);
-    }
+    respawn_sound(cpu);
     SavedRegs r;
     save_regs(cpu, &r);
     /* The crystal first, so its pieces are under the rest. Where the level has
