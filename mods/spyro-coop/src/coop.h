@@ -381,6 +381,7 @@ int      coop_controls_slot_present(int slot);         /* from the cache, for th
 uint32_t coop_controls_slot_held(int slot);            /* likewise */
 uint32_t coop_controls_player(int player);             /* his buttons alone */
 void     coop_controls_status(void);
+int      coop_controls_available(void);                /* api 12: a pad slot per player */
 
 /* coop_rumble.c. Each player's controller buzzes for his own dragon. */
 void coop_rumble_tick_begin(int person);  /* before a player's tick */

@@ -584,6 +584,19 @@ call a halt without a `pad:start` binding. Outside gameplay the whole set is
 merged as before, and the slot-0 staging errors the engine logged for those
 frames are gone with it.
 
+**v0.12.5: a first controller has to play player 1.** The user's question
+after the v0.12.4 test: if the pad auto-slots into player 1's slot, fine, but
+then it should PLAY player 1 - "they plug 4 in, and the 1st controller
+doesn't do anything but pause". Two things of the mod's making stopped it,
+both left over from the days when one controller had to serve players 2 to
+4: `openpete.toml` had every `pad:` entry stripped out of player 1's buttons
+(v0.11.4), and the mod told the game player 1's pad was a plain digital one
+so its stick could not reach him (v0.11.2). The bindings are back - one
+keyboard key and one pad button each, sticks included - and the digital flip
+now happens only on an engine with no pad slots to give the extra players.
+So four controllers is now: pad 1 plays player 1 through OpenPete itself,
+pads 2 to 4 play the others through the mod.
+
 **A workaround for one controller, until then:** the slots follow SDL's
 enumeration order, and `SDL_JOYSTICK_HIDAPI=0` changes it. On the user's
 machine the order becomes mouse, DualSense, keyboard, which should put the

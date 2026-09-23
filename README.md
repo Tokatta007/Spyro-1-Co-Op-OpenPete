@@ -48,22 +48,15 @@ reach it. The slots follow SDL's own order, so launching with the
 environment variable `SDL_JOYSTICK_HIDAPI=0` set can reorder them and push
 the controller down to slot 1, where player 2 can have it.
 
-To keep player 1 on the keyboard while the controllers play the others, give
-each of his buttons one keyboard key and no `pad:` entry in `openpete.toml`,
-for example:
+Nothing needs configuring for the usual case: plug in four controllers and
+the first plays player 1 through OpenPete's own bindings, exactly as it does
+without the mod, while the mod gives the other three to players 2, 3 and 4.
+Player 1 can use the keyboard at the same time; each button holds one
+keyboard key and one pad button.
 
-```toml
-[game.spyro-1.keys.pad]
-cross      = "K"
-square     = "J"
-triangle   = "I"
-circle     = "L"
-dpad_up    = "W"
-dpad_down  = "S"
-dpad_left  = "A"
-dpad_right = "D"
-start      = ["Return", "pad:start"]   # lets a controller pause too
-```
+The awkward case is **one controller with player 1 on the keyboard**: the
+single pad is the first one, so it is player 1's, and no mod can hand it to
+player 2. See the slot note above for the one thing that sometimes moves it.
 
 ## Known limits
 

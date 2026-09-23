@@ -132,6 +132,11 @@ int coop_controls_pad(int player, CoopPad* out) {
     return out->present;
 }
 
+/* Can the extra players have controllers of their own at all? */
+int coop_controls_available(void) {
+    return pads_available();
+}
+
 /* The buttons alone, for the menu. */
 uint32_t coop_controls_player(int player) {
     CoopPad pad;

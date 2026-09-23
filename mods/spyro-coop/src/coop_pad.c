@@ -78,14 +78,20 @@ void coop_pad_status(void) {
    still held reads as a fresh press on the next frame. Tied to "players >= 2"
    as it first was, stepping PLAYERS onto 1 in the Multiplayer menu flipped
    the type while the arrow key was down, and the step ran twice: 4 went to 2
-   (seen by the user). The setting only changes from the M panel's mouse. */
+   (seen by the user).
+
+   AND ONLY ON AN ENGINE WITHOUT PAD SLOTS (v0.12.5). Hiding the stick was
+   for the days when ONE controller played everybody and openpete.toml had to
+   keep it away from player 1. With a pad slot per player, player 1's own
+   controller is his to use, stick included, and taking it away was the
+   reason a first controller "did nothing but pause". */
 static void player1_pad_rules(void) {
     if (g_settings.extra_controls != EXTRA_CONTROLS_CONTROLLER)
         return;
     uint8_t* buf = guest8(OP_GADDR_g_PadBuffer);
     if (buf[PADBUF_STATUS] != 0)
         return;                              /* nothing connected */
-    if (buf[PADBUF_TYPE] == PAD_TYPE_DUALSHOCK)
+    if (!coop_controls_available() && buf[PADBUF_TYPE] == PAD_TYPE_DUALSHOCK)
         buf[PADBUF_TYPE] = PAD_TYPE_DIGITAL;
     if (!coop_enabled())
         return;
