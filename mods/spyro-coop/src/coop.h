@@ -194,6 +194,10 @@ typedef struct {
     int32_t    stray_ticks[COOP_MAX_PLAYERS];     /* per slot: exit glide after slot 0 landed */
     int32_t    results_pending; /* flight results shown: reseed when play resumes */
     uint32_t   controller_held[COOP_MAX_PLAYERS]; /* per player: last tick's buttons */
+    int32_t    rumble[COOP_MAX_PLAYERS][4];       /* per player: normal, electric,
+                                                     custom timers and the custom
+                                                     amount, as the game keeps
+                                                     player 1's (coop_rumble.c) */
 } CoopPartyArena;
 
 /* ------------------------------------------------------------------------
@@ -283,6 +287,14 @@ typedef struct {
     int     split_vertical;  /* 1 vertical, 0 horizontal; no effect until split-screen exists */
     uint8_t color[COOP_MAX_PLAYERS][4]; /* per player: red, green, blue, strength */
     int     extra_controls;  /* EXTRA_CONTROLS_* */
+    int     pad_slot[COOP_MAX_PLAYERS]; /* per player: which host pad slot he plays
+                                           on, 1..3 (player 1's is the game's own,
+                                           entry 0 unused). Which physical pad
+                                           lands in which slot is the engine's
+                                           business, and with a keyboard or a
+                                           mouse seen as a gamepad it is not
+                                           always the order you plugged them in,
+                                           so it is a setting. */
     int     draw_p2;         /* development */
     int     hysteresis;      /* development: enemy switch margin, percent */
 } CoopSettings;
@@ -356,7 +368,7 @@ void coop_effects_tick(CPUState* cpu);   /* the rescue star's clock */
 void coop_effects_draw(CPUState* cpu);   /* the star, from the scene composer's end */
 
 /* coop_controls.c. One extra player's controller, as PS1 buttons (1 = held,
-   the opposite of the wire) and stick bytes (0x80 centred). */
+   the opposite of the wire) and stick bytes (0x80 centered). */
 typedef struct {
     int      present;
     uint32_t held;
@@ -364,8 +376,18 @@ typedef struct {
 } CoopPad;
 
 int      coop_controls_pad(int player, CoopPad* out);  /* tick only; 1 = a controller */
+void     coop_controls_scan(void);                     /* tick only: cache every slot */
+int      coop_controls_slot_present(int slot);         /* from the cache, for the panel */
+uint32_t coop_controls_slot_held(int slot);            /* likewise */
 uint32_t coop_controls_player(int player);             /* his buttons alone */
 void     coop_controls_status(void);
+
+/* coop_rumble.c. Each player's controller buzzes for his own dragon. */
+void coop_rumble_tick_begin(int person);  /* before a player's tick */
+void coop_rumble_tick_end(int person);    /* after it: what it asked for is his */
+void coop_rumble_vbl(void);               /* publish and age the timers, per VBL */
+void coop_rumble_silence(void);           /* stop every extra pad */
+void coop_rumble_status(void);
 
 /* coop_flight.c */
 int  coop_flight_install(void);

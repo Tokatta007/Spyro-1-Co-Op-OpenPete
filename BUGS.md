@@ -516,6 +516,29 @@ engine's own summary reports `pad slots present (VBLs): p1=900 p2=717` - the
 controller drives slot 1, so one controller plays player 2 while the keyboard
 plays player 1. More controllers fill slots 2 and 3 for players 3 and 4.
 
+**v0.12.2: which slot is which, and rumble.** Two things the first test
+turned up. First, what counts as a gamepad is SDL's business: the user's log
+lists his Razer keyboard and (through an XInput shim) his Logitech mouse as
+pads beside the real controller, so the pad a player means is not always slot
+1. "Player n plays on" in the M panel picks the slot, saved as `p2_pad` and
+friends, and the panel lists what every slot is doing so a player can hold a
+button and find his own. The panel draws on the present thread, where
+`pad_read` is refused, so `coop_controls_scan()` caches all four slots once
+per VBL from the PadVSync hook.
+
+Second, **rumble** (`coop_rumble.c`). The game keeps four vibration globals
+and decodes them once per VBL into an actuator pair - normal {1,120},
+electric {1,0}, custom {0,amount}, else {0,0} - then counts each timer down;
+`pad_rumble(slot, small, large)` takes exactly that pair. The globals are one
+set for one dragon, so the mod parks them at zero around each player's tick
+and keeps whatever that tick left: an extra player's goes to his own pad,
+player 1's is merged back into the globals so the game drives his pad as
+always, in whichever slot his dragon ticks. Headless in Artisans, player 2
+walking into something logged "rumble: player 2's own buzz (normal 0, shock
+0, custom 15) goes to pad slot 1", and both dragons ended exactly where they
+did before the change, so the parking is gameplay-neutral. Motors are refused
+headless ("0 motor command(s) issued"), so the buzz itself needs the user.
+
 **One engine-side noise item for the author:** OpenPete 0.4 checks guest pad
 RAM against the record it staged, and this mod deliberately writes that RAM
 (player 1's pad reports itself digital, and outside gameplay the controller's

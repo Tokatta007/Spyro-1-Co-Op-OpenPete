@@ -34,6 +34,15 @@ to *Copy player 1* to have every dragon follow player 1. On OpenPete 0.3 and
 older there are no extra pad slots, so the extra players copy player 1 and the
 log says so.
 
+**Rumble** works for everyone: each controller buzzes for its own dragon,
+from the game's own vibration, and the game's vibration option still turns it
+off.
+
+Which physical controller lands in which pad slot is up to OpenPete and SDL,
+and some keyboards and mice announce themselves as gamepads, so the M overlay
+lists what each slot is doing and lets you say which slot each player reads.
+Hold a button and watch the list to find yours.
+
 To keep player 1 on the keyboard while the controllers play the others, give
 each of his buttons one keyboard key and no `pad:` entry in `openpete.toml`,
 for example:

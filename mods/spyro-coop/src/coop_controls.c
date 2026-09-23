@@ -29,11 +29,20 @@
 #define PAD_BUTTONS_MASK 0xFFFFu
 
 static int g_have_pads = -1;      /* -1 not asked yet, 0 too old, 1 usable */
-static int g_slot_seen[COOP_MAX_PLAYERS];   /* display only */
+static int g_slot_seen[COOP_MAX_PLAYERS];   /* logged once per slot */
+
+/* Last tick's state of every slot, for the settings panel: it draws on the
+   present thread, where pad_read is refused, so it reads this instead. */
+static int      g_slot_present[COOP_MAX_PLAYERS];
+static uint32_t g_slot_held[COOP_MAX_PLAYERS];
 
 static int pads_available(void) {
     if (g_have_pads < 0) {
+#if OPENPETE_MOD_API_VERSION >= 12
         g_have_pads = (g_api->api_version >= 12) ? 1 : 0;
+#else
+        g_have_pads = 0;    /* this SDK has no pad_read to call */
+#endif
         if (!g_have_pads)
             coop_log(OP_MOD_LOG_WARN,
                      "this OpenPete has mod api %u; players 2-4 need api 12 for their own "
@@ -42,30 +51,62 @@ static int pads_available(void) {
     return g_have_pads;
 }
 
-/* One player's pad slot, in tick context. Player is 0-based: player 2 is 1,
-   and reads slot 1. Returns 0 and an empty port when unavailable. */
-int coop_controls_pad(int player, CoopPad* out) {
+/* One slot's bytes, in tick context. */
+static int read_slot(int slot, CoopPad* out) {
     memset(out, 0, sizeof *out);
-    out->held    = 0;
     out->stick_x = 0x80;
     out->stick_y = 0x80;
-    if (player <= 0 || player >= COOP_MAX_PLAYERS || !pads_available())
+    if (slot < 0 || slot >= COOP_MAX_PLAYERS || !pads_available())
         return 0;
 
+#if OPENPETE_MOD_API_VERSION >= 12
     openpete_mod_pad_t pad;
     pad.struct_size = sizeof pad;
-    if (g_api->pad_read(g_self, (uint32_t)player, &pad) != 0)
+    if (g_api->pad_read(g_self, (uint32_t)slot, &pad) != 0)
         return 0;
 
     out->present = pad.present != 0;
     out->held    = (~pad.buttons) & PAD_BUTTONS_MASK;
     out->stick_x = pad.axes[0];
     out->stick_y = pad.axes[1];
+#endif
+    return out->present;
+}
+
+/* Every slot, once per tick, so the panel has something to show. */
+void coop_controls_scan(void) {
+    for (int slot = 0; slot < COOP_MAX_PLAYERS; slot++) {
+        CoopPad pad;
+        read_slot(slot, &pad);
+        g_slot_present[slot] = pad.present;
+        g_slot_held[slot]    = pad.held;
+    }
+}
+
+int      coop_controls_slot_present(int slot) {
+    return (slot >= 0 && slot < COOP_MAX_PLAYERS) ? g_slot_present[slot] : 0;
+}
+uint32_t coop_controls_slot_held(int slot) {
+    return (slot >= 0 && slot < COOP_MAX_PLAYERS) ? g_slot_held[slot] : 0u;
+}
+
+/* One player's controller, in tick context. Player is 0-based: player 2 is 1,
+   and reads whichever slot the settings put him on, slot 1 by default.
+   Returns 0 and an empty port when unavailable. */
+int coop_controls_pad(int player, CoopPad* out) {
+    memset(out, 0, sizeof *out);
+    out->stick_x = 0x80;
+    out->stick_y = 0x80;
+    if (player <= 0 || player >= COOP_MAX_PLAYERS)
+        return 0;
+
+    int slot = g_settings.pad_slot[player];
+    read_slot(slot, out);
 
     if (out->present && !g_slot_seen[player]) {
         g_slot_seen[player] = 1;
         coop_log(OP_MOD_LOG_INFO, "controls: player %d has a controller on pad slot %d",
-                 player + 1, player);
+                 player + 1, slot);
     }
     return out->present;
 }
@@ -83,13 +124,11 @@ void coop_controls_status(void) {
                     g_api->api_version);
         return;
     }
-    char line[128];
+    char line[160];
     int o = 0;
-    for (int p = 1; p < COOP_MAX_PLAYERS; p++) {
-        CoopPad pad;
-        coop_controls_pad(p, &pad);
-        o += snprintf(line + o, sizeof line - o, "  P%d slot %d: %s", p + 1, p,
-                      pad.present ? "connected" : "none");
-    }
+    for (int p = 1; p < COOP_MAX_PLAYERS; p++)
+        o += snprintf(line + o, sizeof line - o, "  P%d slot %d: %s", p + 1,
+                      g_settings.pad_slot[p],
+                      coop_controls_slot_present(g_settings.pad_slot[p]) ? "connected" : "none");
     coop_status("Controllers (player 1 plays on the game's own controls)%s", line);
 }

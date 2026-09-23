@@ -40,6 +40,7 @@ void coop_pad_sample(void) {
 }
 
 void coop_pad_status(void) {
+    coop_rumble_status();
     const uint8_t* p2 = guest8(OP_GADDR_g_PadBufferSecondController);
     coop_status("Controller 2 buffer: %s, input seen %u times",
                      (p2 && PAD_CONNECTED(p2)) ? "connected" : "empty",
@@ -96,11 +97,13 @@ static void player1_pad_rules(void) {
 
 static void on_pad_vsync(CPUState* cpu) {
     g_stats.padvsync_calls++;
+    coop_controls_scan();                    /* every slot, for the panel */
     player1_pad_rules();
     /* Runs every frame in every gamestate, menus included, so it is where an
        M panel edit is adopted. */
     coop_settings_tick();
     coop_tint_state();                       /* every frame, menus and sequences included */
+    coop_rumble_vbl();                       /* each extra pad's motors */
     if (coop_arena()->swapped) {
         g_stats.padvsync_in_swap++;
         if (g_stats.padvsync_in_swap == 1)

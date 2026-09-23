@@ -785,7 +785,9 @@ static void on_spyro_tick(CPUState* cpu) {
         coop_party_arena()->person[0] != 0)
         memcpy(guest8(OP_GADDR_g_Pad), extra_pad[coop_party_arena()->person[0]],
                sizeof extra_pad[0]);                                   /* see CONTROLS */
+    coop_rumble_tick_begin(coop_party_arena()->person[0]);
     g_api->base(cpu);                                  /* slot 0 */
+    coop_rumble_tick_end(coop_party_arena()->person[0]);
     note_portal_touch(portal_before, 0);
     g_in_gameplay_tick = 0;
     coop_respawn_blink_tick();
@@ -853,7 +855,9 @@ static void on_spyro_tick(CPUState* cpu) {
         g_in_gameplay_tick = 1;
         g_ticking_player   = k;
         int32_t portal_before = level_transition();
+        coop_rumble_tick_begin(person);
         g_api->base(cpu);                              /* shadow k */
+        coop_rumble_tick_end(person);
         note_portal_touch(portal_before, k);
         g_in_gameplay_tick = 0;
         g_ticking_player   = 0;
@@ -1037,4 +1041,5 @@ void coop_players_disable(void) {
     A->handover = 0;
     A->swapped  = 0;
     A->ready    = 0;
+    coop_rumble_silence();     /* nobody else's dragon to buzz for */
 }

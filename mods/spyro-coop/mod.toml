@@ -16,6 +16,7 @@
 # uses: `api->call` - running the game's model, shadow and flame renderers for player 2
 # uses: `api->binding_down` - the swap_view development key
 # uses: `api->pad_read` - players 2-4's own controllers (api 12)
+# uses: `api->pad_rumble` - each player's own controller buzzes for his dragon (api 12)
 # uses: `api->material_register_refine` - the rescuer's color on the rescue cutscene's Spyro (shaders/spyro_tint.frag)
 # uses: `api->data_dir` - settings.txt, shared by the in-game menu and the M panel
 # uses: openpete_mod_ui.h - the settings panel in the M overlay
@@ -25,7 +26,7 @@
 [mod]
 id      = "spyro-coop"
 name    = "Spyro Co-Op"
-version = "0.12.1"
+version = "0.12.2"
 game    = "spyro-1"
 api     = 4          # 12 for players 2-4's own controllers; older engines copy player 1
 

@@ -46,6 +46,8 @@ static void set_defaults(CoopSettings* s) {
     for (int i = 0; i < COOP_MAX_PLAYERS; i++)
         memcpy(s->color[i], k_default_color, 4);
     s->extra_controls = EXTRA_CONTROLS_CONTROLLER;
+    for (int p = 1; p < COOP_MAX_PLAYERS; p++)
+        s->pad_slot[p] = p;              /* player 2 on slot 1, and so on */
     s->draw_p2        = 1;
     s->hysteresis     = 25;
 }
@@ -57,6 +59,9 @@ static void clamp(CoopSettings* s) {
     s->draw_p2        = s->draw_p2 ? 1 : 0;
     if (s->extra_controls < 0 || s->extra_controls >= EXTRA_CONTROLS_COUNT)
         s->extra_controls = EXTRA_CONTROLS_CONTROLLER;
+    for (int p = 1; p < COOP_MAX_PLAYERS; p++)
+        if (s->pad_slot[p] < 1 || s->pad_slot[p] >= COOP_MAX_PLAYERS)
+            s->pad_slot[p] = p;
     if (s->hysteresis < 0)  s->hysteresis = 0;
     if (s->hysteresis > 50) s->hysteresis = 50;
 }
@@ -89,6 +94,8 @@ void coop_settings_save(void) {
                 s->color[i][0], s->color[i][1], s->color[i][2], s->color[i][3]);
     fprintf(f, "extra_controls = %s\n",
             s->extra_controls == EXTRA_CONTROLS_COPY ? "copy" : "controller");
+    for (int p = 1; p < COOP_MAX_PLAYERS; p++)
+        fprintf(f, "p%d_pad = %d\n", p + 1, s->pad_slot[p]);
     fprintf(f, "draw_p2 = %d\n", s->draw_p2);
     fprintf(f, "enemy_switch_margin = %d\n", s->hysteresis);
     fclose(f);
@@ -120,6 +127,9 @@ void coop_settings_load(void) {
             } else if (!strcmp(key, "extra_controls"))
                 s->extra_controls = strncmp(val, "copy", 4) == 0 ? EXTRA_CONTROLS_COPY
                                                                   : EXTRA_CONTROLS_CONTROLLER;
+            else if (key[0] == 'p' && key[1] >= '2' && key[1] <= '4' &&
+                     !strcmp(key + 2, "_pad"))
+                s->pad_slot[key[1] - '1'] = atoi(val);
             else if (!strcmp(key, "draw_p2"))
                 s->draw_p2 = atoi(val);
             else if (!strcmp(key, "enemy_switch_margin"))
@@ -178,6 +188,34 @@ static void color_rows(const openpete_mod_ui_t* ui, int player, int* changed) {
     }
 }
 
+/* WHICH CONTROLLER IS WHICH PLAYER. The engine fills pad slots 1 to 3 from
+   the gamepads it opens, and what counts as a gamepad is SDL's business: the
+   user's log lists his keyboard and (through its XInput shim) his mouse
+   beside the real pad, so the pad meant for player 2 is not always slot 1.
+   These rows say which slot each player reads and show what every slot is
+   doing, so a player can hold a button and see where he lands. */
+static void pad_slot_rows(const openpete_mod_ui_t* ui, int* changed) {
+    static const char* const slots[] = { "Pad slot 1", "Pad slot 2", "Pad slot 3" };
+    char label[72];
+    for (int p = 1; p < COOP_MAX_PLAYERS; p++) {
+        if (p >= g_ui_copy.players)
+            break;
+        snprintf(label, sizeof label, "Player %d plays on", p + 1);
+        int idx = g_ui_copy.pad_slot[p] - 1;
+        if (ui->combo(label, &idx, slots, COOP_MAX_PLAYERS - 1)) {
+            g_ui_copy.pad_slot[p] = idx + 1;
+            *changed = 1;
+        }
+    }
+    for (int slot = 1; slot < COOP_MAX_PLAYERS; slot++) {
+        snprintf(label, sizeof label, "  slot %d: %s%s", slot,
+                 coop_controls_slot_present(slot) ? "connected" : "nothing plugged in",
+                 coop_controls_slot_held(slot) ? "  (a button is down)" : "");
+        ui->text_disabled(label);
+    }
+    ui->text_disabled("  slot 0 is player 1's, as OpenPete's own key bindings set it up");
+}
+
 static void settings_panel(const openpete_mod_ui_t* ui) {
     /* Show the live settings unless an edit is still waiting for a tick. */
     if (!g_ui_dirty)
@@ -200,9 +238,12 @@ static void settings_panel(const openpete_mod_ui_t* ui) {
     if (ui->combo("Players 2-4 controls", &idx, controls, EXTRA_CONTROLS_COUNT)) {
         g_ui_copy.extra_controls = idx; changed = 1;
     }
-    ui->tooltip("Controller: players 2, 3 and 4 play on the controllers in pad slots 1, "
-                "2 and 3; player 1 keeps the game's own controls. Copy player 1: every "
-                "dragon follows player 1.");
+    ui->tooltip("Controller: players 2, 3 and 4 each play on their own controller; "
+                "player 1 keeps the game's own controls, keyboard or pad. Copy player 1: "
+                "every dragon follows player 1.");
+
+    if (g_ui_copy.extra_controls == EXTRA_CONTROLS_CONTROLLER)
+        pad_slot_rows(ui, &changed);
 
     idx = g_ui_copy.respawn_modern;
     if (ui->combo("Respawn", &idx, respawn, 2)) { g_ui_copy.respawn_modern = idx; changed = 1; }
