@@ -23,14 +23,20 @@ and the **P** key moves it from dragon to dragon. See
 
 ## Controls
 
-- **Player 1** uses the game's own controls, set up in OpenPete as usual.
-- **Players 2 to 4** share one controller for now, until OpenPete supports
-  more than one. Set "Players 2-4 controls" in the M overlay to *Controller*
-  (the default), or to *Copy player 1* to have every dragon follow player 1.
+**Everyone gets their own controller.** OpenPete 0.4 hands a mod all four pad
+slots, so player 2 plays on the first extra controller, player 3 on the
+second and player 4 on the third, buttons and analog stick both. Player 1
+uses the game's own controls, set up in OpenPete as usual — keyboard or the
+pad in his own slot.
 
-To keep player 1 on the keyboard and the controller for the others, remove
-the controller entries from player 1's buttons in `openpete.toml`, so each
-button has one keyboard key and no `pad:` entry, for example:
+Set "Players 2-4 controls" in the M overlay to *Controller* (the default), or
+to *Copy player 1* to have every dragon follow player 1. On OpenPete 0.3 and
+older there are no extra pad slots, so the extra players copy player 1 and the
+log says so.
+
+To keep player 1 on the keyboard while the controllers play the others, give
+each of his buttons one keyboard key and no `pad:` entry in `openpete.toml`,
+for example:
 
 ```toml
 [game.spyro-1.keys.pad]
@@ -42,14 +48,13 @@ dpad_up    = "W"
 dpad_down  = "S"
 dpad_left  = "A"
 dpad_right = "D"
-start      = ["Return", "pad:start"]   # lets the controller pause too
+start      = ["Return", "pad:start"]   # lets a controller pause too
 ```
 
 ## Known limits
 
-- **Turn frame interpolation off.** With it on, the extra dragons disappear
-  between frames.
-- One screen and one shared controller for players 2 to 4, as above.
+- One shared screen, until OpenPete can draw more than one view.
+- Needs **OpenPete 0.4 or newer** for a controller per player.
 
 ## Different from the PS1 mod
 

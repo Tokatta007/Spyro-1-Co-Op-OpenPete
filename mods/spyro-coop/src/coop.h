@@ -193,7 +193,7 @@ typedef struct {
     int32_t    portal_pin;     /* slot + 1 of the dragon who touched a portal, 0 = none */
     int32_t    stray_ticks[COOP_MAX_PLAYERS];     /* per slot: exit glide after slot 0 landed */
     int32_t    results_pending; /* flight results shown: reseed when play resumes */
-    uint32_t   controller_held; /* the extra players' controller, last tick's buttons */
+    uint32_t   controller_held[COOP_MAX_PLAYERS]; /* per player: last tick's buttons */
 } CoopPartyArena;
 
 /* ------------------------------------------------------------------------
@@ -355,11 +355,16 @@ void coop_effect_play(CPUState* cpu, int layers, int person);
 void coop_effects_tick(CPUState* cpu);   /* the rescue star's clock */
 void coop_effects_draw(CPUState* cpu);   /* the star, from the scene composer's end */
 
-/* coop_controls.c */
-void     coop_controls_sample(void);   /* present thread, every present */
-uint32_t coop_controls_held(void);     /* tick: the extra players' PS1 buttons */
-uint32_t coop_controls_now(void);      /* the same, any context, no bookkeeping */
-uint32_t coop_controls_player(int player);  /* player 1..3 (0-based): his buttons, any context */
+/* coop_controls.c. One extra player's controller, as PS1 buttons (1 = held,
+   the opposite of the wire) and stick bytes (0x80 centred). */
+typedef struct {
+    int      present;
+    uint32_t held;
+    uint8_t  stick_x, stick_y;
+} CoopPad;
+
+int      coop_controls_pad(int player, CoopPad* out);  /* tick only; 1 = a controller */
+uint32_t coop_controls_player(int player);             /* his buttons alone */
 void     coop_controls_status(void);
 
 /* coop_flight.c */

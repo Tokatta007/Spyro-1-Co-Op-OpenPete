@@ -638,19 +638,19 @@ static void maybe_swap_view(CoopArena* A) {
 /* ------------------------------------------------------------------------
  * CONTROLS (2026-09-13). OpenPete gives the game one controller: Spyro 1
  * reads only port 1, and the second pad buffer stays empty (coop_pad.c). So
- * players 2 to 4 are read by the mod itself (coop_controls.c says from
- * where), and turned into the game's own pad record here, the way PadVSync
- * builds player 1's.
+ * players 2 to 4 are read by the mod itself (coop_controls.c), each from his
+ * own pad slot, and turned into the game's own pad record here, the way
+ * PadVSync builds player 1's.
  * For the user's setup player 1 is on the keyboard alone and the controller
  * drives the others; a "pad:" button left in player 1's game bindings moves
  * both.
  *
  * The record starts as player 1's (controller type, calibration) with every
- * input replaced: held from the bindings, down and released as edges against
- * last tick's held (kept in the arena, so rewind agrees), the sticks centered.
- * As in the game, the left stick stands in for the d-pad when the d-pad is
- * idle. Every buffered frame holds the same buttons; only the first carries
- * the edges, so a press lands once however many substeps run.
+ * input replaced: held from his controller, down and released as edges
+ * against his last tick's held (kept in the arena, so rewind agrees), and his
+ * own stick. As in the game, the left stick stands in for the d-pad when the
+ * d-pad is idle. Every buffered frame holds the same buttons; only the first
+ * carries the edges, so a press lands once however many substeps run.
  *
  * "Copy player 1" gives every extra dragon player 1's input, as before; the
  * headless tests need it.
@@ -690,23 +690,33 @@ static void maybe_swap_view(CoopArena* A) {
 
 static void put32(uint8_t* rec, unsigned off, uint32_t v) { memcpy(rec + off, &v, 4); }
 
-static void build_extra_pad(uint8_t* out, const uint8_t* p1_pad) {
+/* One extra player's pad record. `player` is 0-based and never 0 here. */
+static void build_extra_pad(uint8_t* out, const uint8_t* p1_pad, int player) {
     memcpy(out, p1_pad, 0xA4);
     if (g_settings.extra_controls != EXTRA_CONTROLS_CONTROLLER)
         return;                                         /* copy player 1 */
 
-    uint32_t held = coop_controls_held();         /* coop_controls.c */
+    CoopPad pad;
+    coop_controls_pad(player, &pad);                    /* coop_controls.c */
+    uint32_t held = pad.held;
+    if (!(held & PADB_DPAD)) {                          /* his stick, as the game reads one */
+        if (pad.stick_x >= 193)     held |= PADB_RIGHT;
+        else if (pad.stick_x < 64)  held |= PADB_LEFT;
+        if (pad.stick_y >= 193)     held |= PADB_DOWN;
+        else if (pad.stick_y < 64)  held |= PADB_UP;
+    }
 
     CoopPartyArena* P = coop_party_arena();
-    uint32_t down     = held & ~P->controller_held;
-    uint32_t released = P->controller_held & ~held;
-    P->controller_held = held;
+    uint32_t down     = held & ~P->controller_held[player];
+    uint32_t released = P->controller_held[player] & ~held;
+    P->controller_held[player] = held;
 
     put32(out, PADREC_HELD, held);
     put32(out, PADREC_DOWN, down);
     put32(out, PADREC_RELEASED, released);
-    put32(out, PADREC_STICK_MOVED, 0);
-    put32(out, PADREC_STICKS, 0x7F7F7F7Fu);
+    uint32_t sticks = 0x7F7F0000u | (uint32_t)pad.stick_y << 8 | pad.stick_x;
+    put32(out, PADREC_STICK_MOVED, (pad.stick_x != 0x80 || pad.stick_y != 0x80) ? 1 : 0);
+    put32(out, PADREC_STICKS, sticks);
     put32(out, PADREC_NO_BUTTONS, held ? 0 : 1);
     put32(out, PADREC_NO_MOVEMENT, (held & PADB_DPAD) ? 0 : 1);
     for (unsigned f = 0; f < 4; f++) {
@@ -714,8 +724,8 @@ static void build_extra_pad(uint8_t* out, const uint8_t* p1_pad) {
         put32(out, b + 0x04, held);
         put32(out, b + 0x08, f == 0 ? down : 0);
         put32(out, b + 0x0C, f == 0 ? released : 0);
-        put32(out, b + 0x10, 0);
-        put32(out, b + 0x14, 0x7F7F7F7Fu);
+        put32(out, b + 0x10, (pad.stick_x != 0x80 || pad.stick_y != 0x80) ? 1 : 0);
+        put32(out, b + 0x14, sticks);
     }
 }
 
@@ -760,8 +770,9 @@ static void on_spyro_tick(CPUState* cpu) {
     uint32_t p1_active_pad;
     memcpy(p1_pad, guest8(OP_GADDR_g_Pad), sizeof p1_pad);
     p1_active_pad = *(uint32_t*)g_api->guest(OP_GADDR_g_ActivePad);
-    uint8_t extra_pad[0xA4];
-    build_extra_pad(extra_pad, p1_pad);
+    uint8_t extra_pad[COOP_MAX_PLAYERS][0xA4];
+    for (int p = 1; p < COOP_MAX_PLAYERS; p++)
+        build_extra_pad(extra_pad[p], p1_pad, p);
 
     SavedRegs regs;
     save_regs(cpu, &regs);
@@ -772,7 +783,8 @@ static void on_spyro_tick(CPUState* cpu) {
     int32_t portal_before = level_transition();
     if (g_settings.extra_controls == EXTRA_CONTROLS_CONTROLLER &&
         coop_party_arena()->person[0] != 0)
-        memcpy(guest8(OP_GADDR_g_Pad), extra_pad, sizeof extra_pad);   /* see CONTROLS */
+        memcpy(guest8(OP_GADDR_g_Pad), extra_pad[coop_party_arena()->person[0]],
+               sizeof extra_pad[0]);                                   /* see CONTROLS */
     g_api->base(cpu);                                  /* slot 0 */
     note_portal_touch(portal_before, 0);
     g_in_gameplay_tick = 0;
@@ -829,8 +841,9 @@ static void on_spyro_tick(CPUState* cpu) {
         /* INPUT: the extra players' pad (see CONTROLS). g_PadBackup and the
            swap flag stay his own. */
         CoopShadowView v = coop_shadow(k);
-        const uint8_t* his = (coop_party_arena()->person[k] == 0) ? p1_pad : extra_pad;
-        memcpy(v.pad + PAD_SHADOW_PAD, his, sizeof extra_pad);
+        int person = coop_party_arena()->person[k];
+        const uint8_t* his = (person == 0) ? p1_pad : extra_pad[person];
+        memcpy(v.pad + PAD_SHADOW_PAD, his, sizeof extra_pad[0]);
         memcpy(v.pad + PAD_SHADOW_ACTIVEPAD, &p1_active_pad, 4);
 
         swap_all(A, k);

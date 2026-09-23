@@ -86,7 +86,7 @@ static void player1_pad_rules(void) {
     if (buf[PADBUF_TYPE] == PAD_TYPE_DUALSHOCK)
         buf[PADBUF_TYPE] = PAD_TYPE_DIGITAL;
     if (coop_enabled() && coop_gamestate() != GS_PLAYING && coop_gamestate() != GS_PAUSED) {
-        uint32_t extra = coop_controls_now() & 0xFFFFu;
+        uint32_t extra = coop_controls_player(1) & 0xFFFFu;   /* player 2's pad */
         uint32_t held  = ~(((uint32_t)buf[PADBUF_BUTTONS] << 8) | buf[PADBUF_BUTTONS + 1]) & 0xFFFFu;
         held |= extra;
         buf[PADBUF_BUTTONS]     = (uint8_t)(~held >> 8);

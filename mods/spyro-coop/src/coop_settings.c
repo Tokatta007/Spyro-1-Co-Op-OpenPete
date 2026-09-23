@@ -21,7 +21,6 @@
 
 #include "coop.h"
 #include <openpete_mod_ui.h>
-#include <openpete_imgui.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -201,9 +200,9 @@ static void settings_panel(const openpete_mod_ui_t* ui) {
     if (ui->combo("Players 2-4 controls", &idx, controls, EXTRA_CONTROLS_COUNT)) {
         g_ui_copy.extra_controls = idx; changed = 1;
     }
-    ui->tooltip("Controller: players 2 to 4 follow the controller. For player 1 on the "
-                "keyboard alone, remove the \"pad:\" entries from the game's own pad "
-                "keys. Copy player 1: every dragon follows player 1.");
+    ui->tooltip("Controller: players 2, 3 and 4 play on the controllers in pad slots 1, "
+                "2 and 3; player 1 keeps the game's own controls. Copy player 1: every "
+                "dragon follows player 1.");
 
     idx = g_ui_copy.respawn_modern;
     if (ui->combo("Respawn", &idx, respawn, 2)) { g_ui_copy.respawn_modern = idx; changed = 1; }
@@ -232,19 +231,7 @@ static void settings_panel(const openpete_mod_ui_t* ui) {
         g_ui_dirty = 1;
 }
 
-/* ALWAYS, since v0.11.1: the controller for players 2 to 4 is read through
-   ImGui on every present (coop_controls.c), and only an always section runs
-   with the overlay closed. Such a section runs at top level instead of inside
-   the Mods panel, so the settings get their own window while the overlay is
-   open. */
-static void section(const openpete_mod_ui_t* ui) {
-    coop_controls_sample();
-    if (!ui->overlay_open())
-        return;
-    ImGui_SetNextWindowSize((ImVec2){ 420.0f, 0.0f }, ImGuiCond_FirstUseEver);
-    if (ImGui_Begin("Spyro Co-Op", NULL, 0))
-        settings_panel(ui);
-    ImGui_End();
-}
-
-OPENPETE_MOD_UI_SECTION_FLAGS(section, OPENPETE_MOD_UI_ALWAYS)
+/* Back inside the Mods panel (v0.12.1): the always-on section existed only to
+   sample the controller every present, and OpenPete 0.4 reads the pads in
+   tick context instead (coop_controls.c). */
+OPENPETE_MOD_UI_SECTION(settings_panel)

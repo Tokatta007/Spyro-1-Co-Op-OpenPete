@@ -1,119 +1,95 @@
 /**
  * @file coop_controls.c
- * @brief Where players 2 to 4 get their buttons from (2026-09-13).
+ * @brief Where players 2 to 4 get their buttons from.
  *
- * WHY IMGUI. Spyro 1 reads one controller and OpenPete never fills the second
- * pad buffer (coop_pad.c), so the mod reads the extra players' controller
- * from the host itself. [[binding]] rows with gamepad names looked like the
- * way, and failed twice in the user's tests (v0.11.0, v0.11.1): the engine
- * takes at most 8 rows per mod, too few for a controller, and rows naming
- * "pad:south" through "pad4:south" never once read as held with a DualSense
- * plugged in. The engine's overlay is Dear ImGui, though, and a mod UI
- * section flagged OPENPETE_MOD_UI_ALWAYS runs on every present, where
- * ImGui_IsKeyDown(ImGuiKey_GamepadFaceDown) and friends are legal. That read
- * every button, the d-pad and the stick in the v0.11.1 test.
+ * OpenPete 0.4 (mod api 12) reads four controllers and hands a mod every
+ * slot: `pad_read(slot)`, slot 0 being player 1's, the one the game itself
+ * reads, and slots 1 to 3 host-only, "nothing writes them into guest RAM, so
+ * a mod that wants extra players decodes libpad into a pad buffer it
+ * allocates itself". That is exactly this mod's shape, so player n reads pad
+ * slot n - 1 and coop_players.c builds his pad record from it.
  *
- * ImGui backends feed gamepads only with NavEnableGamepad set, so it is set
- * here. The present pass samples into a host value; the tick reads it.
+ * The bytes come from the tick's input-log record, so a read reproduces under
+ * replay, rewind and runahead, unlike the two routes this replaced:
+ *   - [[binding]] rows with gamepad names: at most 8 rows per mod, too few
+ *     for a controller, and with a DualSense plugged in they never read as
+ *     held (the user's tests, v0.11.0 and v0.11.1);
+ *   - ImGui's gamepad keys, sampled in an always-on UI section: worked, but
+ *     merged every controller into one set, so players 2 to 4 shared a
+ *     controller and had no analog sticks.
  *
- * Host input read in a tick diverges a replay, which the SDK allows and warns
- * about, as with the view key.
+ * Before api 12 there is no fourth route, so the extra players fall back to
+ * copying player 1 and the log says why.
  */
 
 #include "coop.h"
-#include <openpete_mod_ui.h>
-#include <openpete_imgui.h>
+#include <stdio.h>
 
-OPENPETE_MOD_IMGUI()
+/* A PSX pad reports 1 for RELEASED; the game's own decode inverts it. */
+#define PAD_BUTTONS_MASK 0xFFFFu
 
-#define PADB_L2       0x0001u
-#define PADB_R2       0x0002u
-#define PADB_L1       0x0004u
-#define PADB_R1       0x0008u
-#define PADB_TRIANGLE 0x0010u
-#define PADB_CIRCLE   0x0020u
-#define PADB_CROSS    0x0040u
-#define PADB_SQUARE   0x0080u
-#define PADB_UP       0x1000u
-#define PADB_RIGHT    0x2000u
-#define PADB_DOWN     0x4000u
-#define PADB_LEFT     0x8000u
-#define PADB_DPAD     (PADB_UP | PADB_RIGHT | PADB_DOWN | PADB_LEFT)
+static int g_have_pads = -1;      /* -1 not asked yet, 0 too old, 1 usable */
+static int g_slot_seen[COOP_MAX_PLAYERS];   /* display only */
 
-/* Written by the present pass, read by the tick. Plain words: a torn read is
-   one frame of a half-updated button set at worst. */
-static volatile uint32_t g_imgui_held;
-static volatile int      g_imgui_backend_pad;   /* io BackendFlags HasGamepad */
-static volatile uint32_t g_imgui_samples;
-
-static const struct { ImGuiKey key; uint32_t bit; } k_imgui_buttons[] = {
-    { ImGuiKey_GamepadFaceDown,  PADB_CROSS },
-    { ImGuiKey_GamepadFaceRight, PADB_CIRCLE },
-    { ImGuiKey_GamepadFaceLeft,  PADB_SQUARE },
-    { ImGuiKey_GamepadFaceUp,    PADB_TRIANGLE },
-    { ImGuiKey_GamepadL1,        PADB_L1 },
-    { ImGuiKey_GamepadR1,        PADB_R1 },
-    { ImGuiKey_GamepadL2,        PADB_L2 },
-    { ImGuiKey_GamepadR2,        PADB_R2 },
-    { ImGuiKey_GamepadDpadUp,    PADB_UP },
-    { ImGuiKey_GamepadDpadDown,  PADB_DOWN },
-    { ImGuiKey_GamepadDpadLeft,  PADB_LEFT },
-    { ImGuiKey_GamepadDpadRight, PADB_RIGHT },
-};
-static const struct { ImGuiKey key; uint32_t bit; } k_imgui_stick[] = {
-    { ImGuiKey_GamepadLStickUp,    PADB_UP },
-    { ImGuiKey_GamepadLStickDown,  PADB_DOWN },
-    { ImGuiKey_GamepadLStickLeft,  PADB_LEFT },
-    { ImGuiKey_GamepadLStickRight, PADB_RIGHT },
-};
-
-/* Present thread, every present (settings.c's always section calls it). */
-void coop_controls_sample(void) {
-    ImGuiIO* io = ImGui_GetIO();
-    if (!io)
-        return;
-    io->ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
-    g_imgui_backend_pad = (io->BackendFlags & ImGuiBackendFlags_HasGamepad) != 0;
-
-    uint32_t held = 0;
-    for (unsigned i = 0; i < sizeof k_imgui_buttons / sizeof k_imgui_buttons[0]; i++)
-        if (ImGui_IsKeyDown(k_imgui_buttons[i].key))
-            held |= k_imgui_buttons[i].bit;
-    if (!(held & PADB_DPAD))
-        for (unsigned i = 0; i < sizeof k_imgui_stick / sizeof k_imgui_stick[0]; i++)
-            if (ImGui_IsKeyDown(k_imgui_stick[i].key))
-                held |= k_imgui_stick[i].bit;
-    g_imgui_held = held;
-    g_imgui_samples++;
+static int pads_available(void) {
+    if (g_have_pads < 0) {
+        g_have_pads = (g_api->api_version >= 12) ? 1 : 0;
+        if (!g_have_pads)
+            coop_log(OP_MOD_LOG_WARN,
+                     "this OpenPete has mod api %u; players 2-4 need api 12 for their own "
+                     "controllers and will copy player 1", g_api->api_version);
+    }
+    return g_have_pads;
 }
 
-static uint32_t g_seen_imgui;   /* display and log-once only */
+/* One player's pad slot, in tick context. Player is 0-based: player 2 is 1,
+   and reads slot 1. Returns 0 and an empty port when unavailable. */
+int coop_controls_pad(int player, CoopPad* out) {
+    memset(out, 0, sizeof *out);
+    out->held    = 0;
+    out->stick_x = 0x80;
+    out->stick_y = 0x80;
+    if (player <= 0 || player >= COOP_MAX_PLAYERS || !pads_available())
+        return 0;
 
-/* The controller's buttons as sampled, for any context. */
-uint32_t coop_controls_now(void) {
-    return g_imgui_held;
+    openpete_mod_pad_t pad;
+    pad.struct_size = sizeof pad;
+    if (g_api->pad_read(g_self, (uint32_t)player, &pad) != 0)
+        return 0;
+
+    out->present = pad.present != 0;
+    out->held    = (~pad.buttons) & PAD_BUTTONS_MASK;
+    out->stick_x = pad.axes[0];
+    out->stick_y = pad.axes[1];
+
+    if (out->present && !g_slot_seen[player]) {
+        g_slot_seen[player] = 1;
+        coop_log(OP_MOD_LOG_INFO, "controls: player %d has a controller on pad slot %d",
+                 player + 1, player);
+    }
+    return out->present;
 }
 
-/* One player's controller (player 0-based, 1..3). There is one controller
-   for players 2 to 4 until OpenPete feeds more, so every one of them gets
-   the same buttons; this is the one place that changes when it does. */
+/* The buttons alone, for the menu. */
 uint32_t coop_controls_player(int player) {
-    (void)player;
-    return g_imgui_held;
-}
-
-/* Tick context: the extra players' buttons this tick. */
-uint32_t coop_controls_held(void) {
-    uint32_t held = g_imgui_held;
-    if (held && !g_seen_imgui)
-        coop_log(OP_MOD_LOG_INFO, "controls: controller input seen (buttons 0x%04X)", held);
-    if (held)
-        g_seen_imgui++;
-    return held;
+    CoopPad pad;
+    coop_controls_pad(player, &pad);
+    return pad.held;
 }
 
 void coop_controls_status(void) {
-    coop_status("Controller: %s, buttons now 0x%04X, ticks with input %u",
-                g_imgui_backend_pad ? "connected" : "none seen",
-                (unsigned)g_imgui_held, g_seen_imgui);
+    if (!pads_available()) {
+        coop_status("Controllers: this OpenPete is too old (mod api %u, needs 12)",
+                    g_api->api_version);
+        return;
+    }
+    char line[128];
+    int o = 0;
+    for (int p = 1; p < COOP_MAX_PLAYERS; p++) {
+        CoopPad pad;
+        coop_controls_pad(p, &pad);
+        o += snprintf(line + o, sizeof line - o, "  P%d slot %d: %s", p + 1, p,
+                      pad.present ? "connected" : "none");
+    }
+    coop_status("Controllers (player 1 plays on the game's own controls)%s", line);
 }

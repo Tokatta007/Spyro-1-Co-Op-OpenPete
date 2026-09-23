@@ -377,11 +377,14 @@ the key trades; it now moves with the dragon, like moby ownership and Sparx.
 
 ## 3. Accepted for now
 
-### X1. Player 2 is invisible while frame interpolation is on
+### X1. Player 2 is invisible while frame interpolation is on: FIXED ENGINE SIDE in OpenPete 0.4
 
-The engine drops the second dragon from in-between frames
-(`PORT-INVENTORY.md` §7). Workaround: interpolation off, or 30 FPS. Needs
-engine support to fix properly.
+The engine dropped the second dragon from in-between frames
+(`PORT-INVENTORY.md` §7); the workaround was interpolation off, or 30 FPS.
+Reported to the author with a minimal repro mod, fixed in his WIP build and
+released in 0.4. Confirmed by the user 2026-09-14: at 100 FPS with
+interpolation on the extra dragons stay drawn and the flame and shadows look
+right.
 
 ### X3. A ram can hesitate when both dragons are near it after a charge
 
@@ -419,7 +422,7 @@ the native renderer's choice.
 For the author note: two Spyro model draws in one frame are not depth-ordered
 by the native renderer the way PsyCross orders them.
 
-### X2. Extra players' controls: one controller for players 2-4, v0.11.5, confirmed in play (one controller)
+### X2. Extra players' controls: a controller each, v0.12.1 (headless proof; awaiting play test)
 
 OpenPete still never fills the game's second pad buffer (`docs/PORTING.md`,
 B1), so the mod reads the extra players' controller from the host and builds
@@ -488,4 +491,37 @@ stepped twice (4 -> 2). Hiding the stick was tied to "players >= 2", so
 landing on 1 turned player 1's pad back into a DualShock mid-press; the
 game recalibrates on that change and PadCaliReset clears m_Held, so the held
 key read as a new press. **v0.11.5** keys it to the controls setting alone.
+
+**v0.12.1: OpenPete 0.4 (mod api 12) reads four pads and hands a mod every
+slot.** `pad_read(slot)` gives slot 0, player 1's, and slots 1 to 3, which
+"nothing writes into guest RAM, so a mod that wants extra players decodes
+libpad into a pad buffer it allocates itself" - this mod's exact shape. So
+player n now reads pad slot n-1 with his own buttons AND his own analog
+stick, and `coop_players.c` builds one pad record per player instead of one
+shared one. The bytes come from the tick's input-log record, so input
+reproduces under replay and rewind, which the ImGui route did not. The always
+-on UI section existed only to sample ImGui every present and is gone; the
+settings are back inside the Mods panel.
+
+**Headless proof 2026-09-22** (v0.4.1, `--skip-to-level artisans`, a two
+-player bk2 whose P1 column holds Up and P2 column holds Left from frame
+2300): the movie's second player lands on pad slot 1, the log says "player 2
+has a controller on pad slot 1", and the two dragons end 20,000 units apart
+(P1 84992,54382 against a wall, P2 83643,74320). A movie carries two players,
+so slots 2 and 3 read absent under replay.
+
+**Slot assignment with a real device 2026-09-22:** with the user's DualSense
+plugged in and player 1's buttons keyboard-only in `openpete.toml`, the
+engine's own summary reports `pad slots present (VBLs): p1=900 p2=717` - the
+controller drives slot 1, so one controller plays player 2 while the keyboard
+plays player 1. More controllers fill slots 2 and 3 for players 3 and 4.
+
+**One engine-side noise item for the author:** OpenPete 0.4 checks guest pad
+RAM against the record it staged, and this mod deliberately writes that RAM
+(player 1's pad reports itself digital, and outside gameplay the controller's
+buttons are merged into his so either can answer dialogue). That trips
+`input-log: slot-0 staging first mismatch ... staged bits=0xFFEF readback
+bits=0x7FEF` as an [error], 1414 times in a 5400-frame run. It is a false
+positive for a mod that writes the buffer from the same staged record, but it
+is loud.
 Headless, the same 15-frame press: 4 -> 2 before, 4 -> 1 after.
