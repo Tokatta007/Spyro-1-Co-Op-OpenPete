@@ -539,6 +539,40 @@ walking into something logged "rumble: player 2's own buzz (normal 0, shock
 did before the change, so the parking is gameplay-neutral. Motors are refused
 headless ("0 motor command(s) issued"), so the buzz itself needs the user.
 
+**v0.12.2 test: the controller moved nobody.** Pause worked (Options is bound
+to player 1's start in openpete.toml) and the keyboard played player 1, but no
+other button did anything. The log says why. OpenPete opens three "gamepads"
+on the user's machine - the DualSense, his Razer keyboard, and his Logitech
+mouse through an XInput shim - and fills the pad slots in that enumeration
+order, so:
+
+    slot 0  DualSense            <- player 1's slot, the game's own
+    slot 1  XInput Controller #1 (the mouse)
+    slot 2  Razer Huntsman V3 Pro (the keyboard)
+    slot 3  absent
+
+The mod reported players 2 and 3 as "connected" because slots 1 and 2 really
+do have devices; they are just a mouse and a keyboard, which never press a
+gamepad button. Meanwhile the one real controller is in player 1's slot,
+where only what openpete.toml binds reaches the game - `pad:start`, hence the
+pause and nothing else. The engine's own census agrees: `pad slots present
+(VBLs): p1=7724 p2=6139 p3=6139 p4=0`.
+
+Nothing in openpete.toml or the flags assigns a device to a slot (searched
+the executable's strings: `[keys.pad2..4]` rows exist but "are parsed and do
+not re-map that player yet"), so a mod cannot move the controller off slot 0.
+
+**v0.12.3** shows all four slots in the M panel, slot 0 included, with a
+marker on whichever slot is pressing something, and logs once per slot that
+has a device. Finding your own controller is then a matter of pressing a
+button and reading the list.
+
+**The ask for the author:** a way to say which device is which pad slot -
+even just "player 1 is the keyboard, give the pads to slots 1 and up", or
+skipping devices that are really a keyboard or a mouse. Without it, one
+controller plus a keyboard cannot be two players, which is the commonest
+couch setup there is.
+
 **One engine-side noise item for the author:** OpenPete 0.4 checks guest pad
 RAM against the record it staged, and this mod deliberately writes that RAM
 (player 1's pad reports itself digital, and outside gameplay the controller's

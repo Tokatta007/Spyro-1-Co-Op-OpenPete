@@ -73,13 +73,21 @@ static int read_slot(int slot, CoopPad* out) {
     return out->present;
 }
 
-/* Every slot, once per tick, so the panel has something to show. */
+/* Every slot, once per tick, so the panel has something to show. Says once
+   which slots have a device: the engine says which are empty, and between
+   the two the log accounts for every slot. */
 void coop_controls_scan(void) {
+    static int said[COOP_MAX_PLAYERS];
     for (int slot = 0; slot < COOP_MAX_PLAYERS; slot++) {
         CoopPad pad;
         read_slot(slot, &pad);
         g_slot_present[slot] = pad.present;
         g_slot_held[slot]    = pad.held;
+        if (pad.present && !said[slot]) {
+            said[slot] = 1;
+            coop_log(OP_MOD_LOG_INFO, "controls: pad slot %d has a device%s", slot,
+                     slot == 0 ? " (player 1's own slot)" : "");
+        }
     }
 }
 

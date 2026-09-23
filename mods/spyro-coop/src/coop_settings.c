@@ -196,7 +196,7 @@ static void color_rows(const openpete_mod_ui_t* ui, int player, int* changed) {
    doing, so a player can hold a button and see where he lands. */
 static void pad_slot_rows(const openpete_mod_ui_t* ui, int* changed) {
     static const char* const slots[] = { "Pad slot 1", "Pad slot 2", "Pad slot 3" };
-    char label[72];
+    char label[128];
     for (int p = 1; p < COOP_MAX_PLAYERS; p++) {
         if (p >= g_ui_copy.players)
             break;
@@ -207,13 +207,15 @@ static void pad_slot_rows(const openpete_mod_ui_t* ui, int* changed) {
             *changed = 1;
         }
     }
-    for (int slot = 1; slot < COOP_MAX_PLAYERS; slot++) {
-        snprintf(label, sizeof label, "  slot %d: %s%s", slot,
+    for (int slot = 0; slot < COOP_MAX_PLAYERS; slot++) {
+        snprintf(label, sizeof label, "  slot %d%s: %s%s", slot,
+                 slot == 0 ? " (player 1: the game's own keys and pad)" : "",
                  coop_controls_slot_present(slot) ? "connected" : "nothing plugged in",
-                 coop_controls_slot_held(slot) ? "  (a button is down)" : "");
+                 coop_controls_slot_held(slot) ? "  <- a button is down" : "");
         ui->text_disabled(label);
     }
-    ui->text_disabled("  slot 0 is player 1's, as OpenPete's own key bindings set it up");
+    ui->text_disabled("  Press a button and see which slot answers. A controller that lights");
+    ui->text_disabled("  slot 0 is player 1's, whatever openpete.toml binds to it.");
 }
 
 static void settings_panel(const openpete_mod_ui_t* ui) {
