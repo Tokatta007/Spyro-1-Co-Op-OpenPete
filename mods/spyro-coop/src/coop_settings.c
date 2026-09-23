@@ -48,6 +48,7 @@ static void set_defaults(CoopSettings* s) {
     s->extra_controls = EXTRA_CONTROLS_CONTROLLER;
     for (int p = 1; p < COOP_MAX_PLAYERS; p++)
         s->pad_slot[p] = p;              /* player 2 on slot 1, and so on */
+    s->respawn_sound  = 1;               /* the inventory swoosh, until told otherwise */
     s->draw_p2        = 1;
     s->hysteresis     = 25;
 }
@@ -62,6 +63,8 @@ static void clamp(CoopSettings* s) {
     for (int p = 1; p < COOP_MAX_PLAYERS; p++)
         if (s->pad_slot[p] < 1 || s->pad_slot[p] >= COOP_MAX_PLAYERS)
             s->pad_slot[p] = p;
+    if (s->respawn_sound < 0 || s->respawn_sound >= k_respawn_sound_count)
+        s->respawn_sound = 1;
     if (s->hysteresis < 0)  s->hysteresis = 0;
     if (s->hysteresis > 50) s->hysteresis = 50;
 }
@@ -96,6 +99,7 @@ void coop_settings_save(void) {
             s->extra_controls == EXTRA_CONTROLS_COPY ? "copy" : "controller");
     for (int p = 1; p < COOP_MAX_PLAYERS; p++)
         fprintf(f, "p%d_pad = %d\n", p + 1, s->pad_slot[p]);
+    fprintf(f, "respawn_sound = %d\n", s->respawn_sound);
     fprintf(f, "draw_p2 = %d\n", s->draw_p2);
     fprintf(f, "enemy_switch_margin = %d\n", s->hysteresis);
     fclose(f);
@@ -130,6 +134,8 @@ void coop_settings_load(void) {
             else if (key[0] == 'p' && key[1] >= '2' && key[1] <= '4' &&
                      !strcmp(key + 2, "_pad"))
                 s->pad_slot[key[1] - '1'] = atoi(val);
+            else if (!strcmp(key, "respawn_sound"))
+                s->respawn_sound = atoi(val);
             else if (!strcmp(key, "draw_p2"))
                 s->draw_p2 = atoi(val);
             else if (!strcmp(key, "enemy_switch_margin"))
@@ -251,6 +257,22 @@ static void settings_panel(const openpete_mod_ui_t* ui) {
     if (ui->combo("Respawn", &idx, respawn, 2)) { g_ui_copy.respawn_modern = idx; changed = 1; }
     ui->tooltip("Modern: only the dragon who died respawns, and one shared life is spent. "
                 "Original: every death reloads both, as the original game does.");
+
+    /* THE RESPAWN SOUND. Chosen by ear: the list is the game's own sounds that
+       could pass for an arrival (coop_effects.c), and the button plays the one
+       selected without waiting for someone to die. */
+    {
+        static const char* names[16];
+        for (int i = 0; i < k_respawn_sound_count && i < 16; i++)
+            names[i] = k_respawn_sounds[i].name;
+        idx = g_ui_copy.respawn_sound;
+        if (ui->combo("Respawn sound", &idx, names, k_respawn_sound_count)) {
+            g_ui_copy.respawn_sound = idx; changed = 1;
+        }
+        ui->tooltip("Plays when a dragon respawns on his own, from the game's own sounds.");
+        if (ui->button("Play it now"))
+            coop_sound_test_request();
+    }
 
     idx = g_ui_copy.split_vertical;
     if (ui->combo("Split screen", &idx, split, 2)) { g_ui_copy.split_vertical = idx; changed = 1; }

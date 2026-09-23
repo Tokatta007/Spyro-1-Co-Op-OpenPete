@@ -105,6 +105,31 @@ cutscene.
 **v0.11.0:** the mix is final. The bench is gone: no O key, no layer boxes or
 height slider; a respawn always plays every layer at -300.
 
+### M9. A respawn sound: BUILT (v0.12.6), the sound itself is the user's to pick
+
+User request 2026-09-22, after the controllers were working: "I feel like we
+need a respawn sound every time a player respawns. The effects are perfect,
+but I think a sound effect would tie it together", describing a slow fwosh,
+"maybe the slowed down version of one of the main menu sounds (I believe when
+you load a memory card)".
+
+The game keeps its sounds in a table of ids (the decompilation's
+`sound_table.h`), and the mod already plays two of them for its own menu, so
+a respawn now plays one the same way: `PlaySound(id, NULL, 16, NULL)`, 2D and
+unconditional, from `coop_effect_play`.
+
+Which one is a question for ears, not for reading, so "Respawn sound" in the
+M panel lists the twelve that could pass for an arrival - inventory swoosh
+(the closest thing to the memory card sound), menu sound, titlescreen move,
+exit vortex, whirlwind, Spyro stars, dragon flash, moby poof, Spyro unsquish,
+the rescue sound, the windy loop, and None - with a "Play it now" button so
+the choice can be made without dying for it. The default is the inventory
+swoosh. The choice saves as `respawn_sound`.
+
+The same request dropped the crystal burst from the respawn mix: it is the
+dragon's own crystal breaking, and beside a respawn sound it read as a second
+event. Sparks, dust, smoke and the star remain.
+
 ### M8. Flight levels: a crash sits that player out: BUILT (v0.10.3), awaiting play
 
 User request 2026-09-13: flight levels have no respawns, and one crash ended

@@ -14,8 +14,9 @@ and the **P** key moves it from dragon to dragon. See
 - Up to four dragons, each in their own color.
 - A **Multiplayer** page in the pause menu: number of players, respawn style,
   and a Colors page where every player sets their own color.
-- Respawns: a dragon who dies respawns on his own with a crystal burst, while
-  the others play on. The original "everyone restarts" style is an option.
+- Respawns: a dragon who dies respawns on his own in a burst of sparks, dust
+  and smoke, with a sound of his own. The original "everyone restarts" style
+  is an option.
 - Flight levels: a dragon who crashes sits out while the others finish.
 - Enemies go after the nearest dragon, every dragon has his own Sparx, and
   portals, lifts, whirlwinds, dragon rescues and the balloonist all work with
